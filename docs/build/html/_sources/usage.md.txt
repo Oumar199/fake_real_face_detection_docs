@@ -12,5 +12,3 @@ To install hugging face:
 
 To create a recipe:
 
-```{eval-rst}
-.. function::

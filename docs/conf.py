@@ -20,7 +20,8 @@ extensions = [
     'sphinx.ext.autosectionlabel',
     'nbsphinx', # MyST-NB
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode'
 ]
 
 templates_path = ['_templates']
