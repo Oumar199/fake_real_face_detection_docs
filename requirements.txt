@@ -1,6 +1,7 @@
 furo
 myst-parser
 Sphinx==6.2.1
+nbsphinx
 streamlit
 tokenizers
 torch
