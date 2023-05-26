@@ -7,3 +7,8 @@ To install hugging face:
 ```console
 (.venv) $ pip install transformers
 ```
+
+## Creating recipes
+
+To create a recipe:
+

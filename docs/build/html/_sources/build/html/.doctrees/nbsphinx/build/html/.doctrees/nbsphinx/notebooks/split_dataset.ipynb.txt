@@ -1,0 +1,146 @@
+{
+ "cells": [
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Split data 🫧\n",
+    "----------------------------\n",
+    "In this notebook, we will split the dataset between training, validation and test sets. It is part of the model selection. The training set will be used to train the model and must be at least $50\\%$ of the whole dataset in order to make the model to make the difference between a real image and a photoshopped one. The number of training images must tend to infinity in order to find the right pattern or model that most fits the images and also to not over-fit. The validation set is used to select the best model or set of hyperparameters and also the evaluate the model during the training. The test is used only to verify if the model is generalized on non seen images. We will the stratified random sampling in order to obtain the proportion of labels in each set. That is we randomly sample by strate where each strate is a group of images sharing the same label. \n",
+    "\n",
+    "Since we have only $2041$ images and it is a small size, we decided to take $80\\%$ of the dataset to train the model, $10\\%$ to validate the model and $10\\%$ to test. We will take the same proportions that indicated in the first pie chart of the following image:\n",
+    "\n",
+    "![train_test_split](https://assets-global.website-files.com/5d7b77b063a9066d83e1209c/613ec5b6c3da5313e1abcc47_UeKfm9v6E9QobwFfG3ud_20Q82QoqI8W6kXQnDm_QBnOVyQXCNmwjWtMI5vD9du4cjovnpzSYBbIDHdSU-57H1Bb4DfuUCaSjZjozKIwD0IQsH7FyMuFTW7aYVW-zelk2RNMAez3%3Ds0.png)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us create a function which splits the dataset and create new directories for them."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Overwriting fake-face-detection/fake_face_detection/utils/split_data.py\n"
+     ]
+    }
+   ],
+   "source": [
+    "%%writefile fake-face-detection/fake_face_detection/utils/split_data.py\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from glob import glob\n",
+    "import shutil\n",
+    "import os\n",
+    "\n",
+    "def split_data_from_dir(path: str, new_path: str, test_size: float = 0.2, valid_size: float = 0.2, force_placement: bool = True):\n",
+    "    \n",
+    "    assert test_size > 0 and test_size < 0.5 and valid_size >= 0 and valid_size < 0.5\n",
+    "    \n",
+    "    assert os.path.exists(path) and os.path.isdir(path)\n",
+    "    \n",
+    "    assert os.path.exists(new_path) and os.path.isdir(new_path)\n",
+    "    \n",
+    "    # let us recuperate the images' path from the directory\n",
+    "    dirs = os.listdir(path)\n",
+    "    \n",
+    "    # let us recuperate the image of each directory and split the images before making them in new directories\n",
+    "    for dir_ in dirs:\n",
+    "        \n",
+    "        # let us recuperate the path of the directory\n",
+    "        dir_path = os.path.join(path, dir_)\n",
+    "        \n",
+    "        # let us verify if it is truly a directory before making the following processes\n",
+    "        if os.path.isdir(dir_path):\n",
+    "            \n",
+    "            # let us recuperate the files' paths in it\n",
+    "            images = os.listdir(dir_path)\n",
+    "            \n",
+    "            # let us split the data between training and test set\n",
+    "            train_set, test_set = train_test_split(images, test_size = test_size)\n",
+    "            \n",
+    "            # let us split the training set between training and validation set\n",
+    "            train_set, valid_set = train_test_split(train_set, test_size = valid_size)\n",
+    "            \n",
+    "            # let us create the train test and valid directories\n",
+    "            if not os.path.exists(os.path.join(os.path.join(new_path, 'train'), dir_)) or\\\n",
+    "                not os.path.exists(os.path.join(os.path.join(new_path, 'test'), dir_)) or\\\n",
+    "                    not os.path.exists(os.path.join(os.path.join(new_path, 'valid'), dir_)):\n",
+    "                        \n",
+    "                        [os.makedirs(os.path.join(os.path.join(new_path, set_), dir_)) for set_ in ['train', 'test', 'valid']]\n",
+    "            \n",
+    "            elif not force_placement:\n",
+    "                \n",
+    "                raise OSError(f\"One of the training, validation or testing directory for the class {dir_} already exists! Enable the force_placement argument if you want to use already created directories.\")\n",
+    "                \n",
+    "            # let us place the sets in their locations\n",
+    "            [shutil.copyfile(os.path.join(dir_path, image), os.path.join(os.path.join(os.path.join(new_path, 'train'), dir_), image)) for image in train_set]\n",
+    "            [shutil.copyfile(os.path.join(dir_path, image), os.path.join(os.path.join(os.path.join(new_path, 'test'), dir_), image)) for image in test_set]\n",
+    "            [shutil.copyfile(os.path.join(dir_path, image), os.path.join(os.path.join(os.path.join(new_path, 'valid'), dir_), image)) for image in valid_set]\n",
+    "            \n",
+    "    print(f\"All the file in {path} was copied in {new_path} successfully!\")\n",
+    "    \n",
+    "    "
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us create the training, validation and test sets."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "All the file in data/real_and_fake_face/ was copied in data/real_and_fake_splits/ successfully!\n"
+     ]
+    }
+   ],
+   "source": [
+    "%run fake-face-detection/fake_face_detection/utils/split_data.py\n",
+    "\n",
+    "split_data_from_dir('data/real_and_fake_face/', 'data/real_and_fake_splits/', test_size = 0.1,\n",
+    "                    valid_size = 0.1)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "pytorch1-HleOW5am-py3.10",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.8"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}

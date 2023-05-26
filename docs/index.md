@@ -17,5 +17,12 @@ Read installation instructions in {ref}`Installation`.
 :maxdepth: 2
 
 usage
+notebooks/context_of_the_project
+notebooks/bayesian_optimization
+notebooks/generate_and_visualize
+notebooks/preprocessing_and_loading
+notebooks/split_dataset
+notebooks/vit_model
+
 ```
 
