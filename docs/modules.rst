@@ -1,8 +1,0 @@
-src
-===
-
-.. toctree::
-   :maxdepth: 4
-
-   fake_face_detection
-   setup
