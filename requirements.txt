@@ -119,7 +119,7 @@ llvmlite==0.39.1
 lxml==4.9.2
 Mako==1.2.4
 manim==0.17.2
-ManimPango==0.4.3
+# ManimPango==0.4.3
 mapbox-earcut==1.0.1
 mapping==0.1.6
 Markdown==3.4.1
