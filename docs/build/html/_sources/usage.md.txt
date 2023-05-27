@@ -8,7 +8,7 @@ The `fake_face_detection` package contains functions and classes used for making
 ```console
 $ git clone https://github.com/Oumar199/fake_face_detection_ViT.git
 ```
-- Enter the cloned directory with the command:
+- Switch to the cloned directory with the command:
 ```console
 $ cd fake_face_detection_ViT
 ```
@@ -28,7 +28,7 @@ $ pip install -e fake-face-detection
 
 ## Example
 
-After installing the package, you can test it by creating a Python file named <i style="color:orange">optimization</i> and add the following code inside the file to optimize the parameters of your objective function:
+After installing the package, you can test it by creating a Python file named <i style="color:orange">optimization.py</i> and add the following code inside the file to optimize the parameters of your objective function:
 ```python
 # import the Bayesian optimization class
 from fake_face_detection.optimization.bayesian_optimization import SimpleBayesianOptimization
