@@ -14,7 +14,7 @@ The image above is described as a fake image file. The name of the file can be d
 
 - The first part indicates the quality of the Photoshop or the difficulty of recognizing that it is fake;
 - The second part indicates the identification number of the image;
-- The third and final part indicates the modified segment of the face in binary digits with the following signature -> <i style="chocolate">\color{orange}[bit\_left\_eye,\space bit\_right\_eye,\space bit\_nose,\space bit\_mouth]</i>.
+- The third and final part indicates the modified segment of the face in binary digits with the following signature -> <i style="chocolate">[bit_left_eye, bit_right_eye, bit_nose, bit_mouth]</i>.
 
 
 The segment is modified if it is the positive bit (1). Otherwise, the segment is not modified. 

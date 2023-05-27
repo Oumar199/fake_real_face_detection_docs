@@ -74,7 +74,7 @@
    "source": [
     "Like we did to calculate the means and variance of the images, we can at first **divide the images' arrays by 255** to process float values. Doing so also made the means and the variances scaled between 0 and 1. Dividing the images by the maximum pixel prevents the model from exploding gradient while being trained. The gradient exploding make the weights tend to infinity and not to converge anymore because, with the stochastic gradient descent, we have the following computation, which is made at each new update of the weights: $w = w - \\delta_w \\times \\alpha$, where $w$ represent a weight matrix, $\\delta_w$ is the derivation of the loss compared with the weight matrix and $\\alpha$ is the step size. If $\\delta_w \\sim \\infty$ then $w$ also tends to $\\infty$. \n",
     "\n",
-    "![exploding_gradient](sdsaldjksld.png)\n",
+    "![exploding_gradient](https://production-media.paperswithcode.com/methods/Screen_Shot_2020-05-28_at_12.41.14_PM_LLryIVA.png)\n",
     "\n",
     "The second normalization we can do is for the transfer learning task and imply normalizing the image by the same mean and standard deviation as the transferred model was pre-trained on. It will add stability to the fine-tuning because the pictures will have the same distribution as the base images and then totally simplify the adaptation of the model to the new photos. The following illustration may make you better understand.\n",
     "\n",
