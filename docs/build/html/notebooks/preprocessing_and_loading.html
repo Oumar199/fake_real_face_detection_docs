@@ -1,0 +1,1035 @@
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Split data 🫧" href="split_dataset.html" /><link rel="prev" title="Generation and Exploration of the images 🔎" href="generate_and_visualize.html" />
+
+    <!-- Generated with Sphinx 6.2.1 and Furo 2023.05.20 -->
+        <title>Preprocessing and loading ⚗️ - Fake and Real Face Detection with ViT 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?digest=e6660623a769aa55fea372102b9bf3151b292993" />
+    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">Fake and Real Face Detection with ViT 0.0.1 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  
+  <span class="sidebar-brand-text">Fake and Real Face Detection with ViT 0.0.1 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Preprocessing and loading ⚗️</a></li>
+<li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section id="Preprocessing-and-loading-⚗️">
+<h1>Preprocessing and loading ⚗️<a class="headerlink" href="#Preprocessing-and-loading-⚗️" title="Permalink to this heading">#</a></h1>
+<p>In this notebook, we will define the custom dataset, the data locator that will use the ViT Model trainer to load the data, and the main preprocessing to make. Notice that the calculation of the loss is inputted in this notebook.</p>
+<p>We will need some libraries.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">warnings</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s1">&#39;ignore&#39;</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">DataLoader</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span><span class="p">,</span> <span class="n">ImageDraw</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+
+
+<span class="c1"># set style of the plots</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">style</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;ggplot&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<section id="Preprocessing">
+<h2>Preprocessing<a class="headerlink" href="#Preprocessing" title="Permalink to this heading">#</a></h2>
+<p>The preprocessing of the images understand some modifications to make on the photos to use them as input to the model. Some of them depend on that applied to the images on which the ViT model was pre-trained. We will demystify the major transformations made on the ImageNet to be fed inside the ViT Model.</p>
+<section id="Normalization">
+<h3>Normalization<a class="headerlink" href="#Normalization" title="Permalink to this heading">#</a></h3>
+<p>Like we did to calculate the means and variance of the images, we can at first <strong>divide the images’ arrays by 255</strong> to process float values. Doing so also made the means and the variances scaled between 0 and 1. Dividing the images by the maximum pixel prevents the model from exploding gradient while being trained. The gradient exploding make the weights tend to infinity and not to converge anymore because, with the stochastic gradient descent, we have the following computation, which is made at
+each new update of the weights: <span class="math notranslate nohighlight">\(w = w - \delta_w \times \alpha\)</span>, where <span class="math notranslate nohighlight">\(w\)</span> represent a weight matrix, <span class="math notranslate nohighlight">\(\delta_w\)</span> is the derivation of the loss compared with the weight matrix and <span class="math notranslate nohighlight">\(\alpha\)</span> is the step size. If <span class="math notranslate nohighlight">\(\delta_w \sim \infty\)</span> then <span class="math notranslate nohighlight">\(w\)</span> also tends to <span class="math notranslate nohighlight">\(\infty\)</span>.</p>
+<img alt="exploding_gradient" src="https://img-blog.csdn.net/20170511075921850?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvYXdzMzIxNzE1MA==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast" />
+<p>The second normalization we can do is for the transfer learning task and imply normalizing the image by the same mean and standard deviation as the transferred model was pre-trained on. It will add stability to the fine-tuning because the pictures will have the same distribution as the base images and then totally simplify the adaptation of the model to the new photos. The following illustration may make you better understand.</p>
+<img alt="transferring_ability" src="https://i0.wp.com/datascientest.com/wp-content/uploads/2020/08/illu_DLtransfer_blog-33.png?resize=1024%2C562&amp;ssl=1" />
+<p>The pre-trained ViT Model implies taking the value of <span class="math notranslate nohighlight">\(0.5\)</span> for both the means and the standard deviations at each color. We must then take the same values when normalizing the new images. The normalization is done by making the following transformation on each pixel:</p>
+<p>$$</p>
+<p>pix^{<span class="math">\prime</span>} = <span class="math">\frac{pix - pix \times 0.5}{pix \times 0.5}</span></p>
+<p>$$</p>
+<p><span class="math notranslate nohighlight">\(pix^{\prime}\)</span> represents the normalized pixel and <span class="math notranslate nohighlight">\(pix\)</span>, the original one.</p>
+</section>
+<section id="Resizing-and-resampling-strategies">
+<h3>Resizing and resampling strategies<a class="headerlink" href="#Resizing-and-resampling-strategies" title="Permalink to this heading">#</a></h3>
+<p>The different images must have the same size but only. Our current images (images of faces) are all of the same size, which is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[height = 600 \space pixels, width = 600 \space pixels, channels = 3\]</div>
+</div>
+<p>. However, for the transfer learning, we must make the images the same size as the original ones. The ViT Model was trained on images of <span class="math notranslate nohighlight">\(size = (224, 224)\)</span> without considering the number of channels. It is done because the linear projection using the ViT Model takes as enter a sequence of inputs where each of them initially has the following height and width <span class="math notranslate nohighlight">\(224 / \sqrt{256} = 14\)</span>. The value of <span class="math notranslate nohighlight">\(256\)</span> is the number of patches we send to the model as a sequence. Each patch will
+contain <span class="math notranslate nohighlight">\(16\times 16\)</span> pixels for each channel. Let us explain it by creating <span class="math notranslate nohighlight">\(256\)</span> patches from our current images:</p>
+<p>Suppose we want to get patches from the following random image in our dataset.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">89</span><span class="p">)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;data/real_and_fake_face/training_real/*&#39;</span><span class="p">)))</span>
+
+<span class="n">image</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_preprocessing_and_loading_10_0.png" src="../_images/notebooks_preprocessing_and_loading_10_0.png" />
+</div>
+</div>
+<p>We must know how many pixels are horizontally and vertically inside the image, which is the height and width of the picture.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span> <span class="c1"># will return 600 for height and 600 for width</span>
+</pre></div>
+</div>
+</div>
+<p>Knowing that we will need 256 patches (part of the images), we will need to identify the height and width of each patch by dividing them by the square root of the number of patches. The result is a decimal, so let us take only the integer part. We will lose some pixels but only for the explanation. We will explain how to solve this problem later when resampling and when describing the method used by the ViT Model to project the patches (in this notebook <a class="reference internal" href="vit_model.html"><span class="doc">vit_model</span></a>).</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># let us calculate the number of divisions to make to the width and height of the image</span>
+<span class="n">n_patch</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">256</span><span class="p">))</span>
+
+<span class="n">patch_h</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="n">n_patch</span><span class="p">)</span> <span class="c1"># notice that the height must be divisible by the number of divisions</span>
+
+<span class="n">patch_w</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="n">n_patch</span><span class="p">)</span> <span class="c1"># notice that the width must be divisible by the number of divisions</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Height and width of each patch: </span><span class="si">{</span><span class="p">(</span><span class="n">patch_h</span><span class="p">,</span><span class="w"> </span><span class="n">patch_w</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Height and width of each patch: (37, 37)
+</pre></div></div>
+</div>
+<p>Then each patch must have a <strong>(37, 37)</strong>size. To recuperate the patches with the precise size, we must define <strong>16 boxes with their coordinates</strong> according to the height’s axis and the width’s axis of the image. The position of a box is defined by taking the coordinate of the top left of the box and that of the bottom right of the box. The first box will have coordinates of -&gt; <strong>(top_left = (0, 0), bottom_right = (37, 37))</strong>. We only need to identify the first coordinate and add the patch size
+to find the second coordinate. For the next boxes, we must modify the top_left by adding patch size at each time to one of the height’s axes (the first number of the coordinate) and width axes (the second number of the coordinate) of a current box ‘a number of divisions’ times. We identify the second coordinate each time to trace the whole box. Let us trace the first (in red) and the second (in cyan) coordinates of the boxes inside a figure.</p>
+<p><strong>Note</strong>: The <code class="docutils literal notranslate"><span class="pre">product</span></code> creates a tuple for each possible coordinate between position on the height’s axis going from 0 to <span class="math notranslate nohighlight">\(patch\_h \times n\_patch\)</span> by step of <span class="math notranslate nohighlight">\(patch\_h\)</span> and position on width’s axis going from 0 to <span class="math notranslate nohighlight">\(path\_w \times n\_patch\)</span> by step of <span class="math notranslate nohighlight">\(patch\_w\)</span>.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># we will find the first coordinates of the boxes with product function of itertools</span>
+<span class="n">first_coordinates</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">patch_h</span> <span class="o">*</span> <span class="n">n_patch</span><span class="p">,</span> <span class="n">patch_h</span><span class="p">),</span>
+                                      <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">patch_w</span> <span class="o">*</span> <span class="n">n_patch</span><span class="p">,</span> <span class="n">patch_w</span><span class="p">)))</span>
+
+<span class="c1"># get the first coordinates of the boxes</span>
+<span class="n">poses_h</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">first_coordinates</span><span class="p">]</span>
+<span class="n">poses_w</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">first_coordinates</span><span class="p">]</span>
+
+<span class="c1"># get the second coordinates of the boxes by adding to the first coordinates the patch height and width</span>
+<span class="n">poses_h_2</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">patch_h</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">first_coordinates</span><span class="p">]</span>
+<span class="n">poses_w_2</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">patch_w</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">first_coordinates</span><span class="p">]</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">poses_w</span><span class="p">,</span> <span class="n">poses_h</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="s1">&#39;first_coordinates&#39;</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;red&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;height&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;width&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Firt coordinates&quot;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">invert_yaxis</span><span class="p">()</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">poses_w_2</span><span class="p">,</span> <span class="n">poses_h_2</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="s1">&#39;second_coordinates&#39;</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;blue&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Second coordinates&quot;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;height&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;width&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">invert_yaxis</span><span class="p">()</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_preprocessing_and_loading_16_0.png" src="../_images/notebooks_preprocessing_and_loading_16_0.png" />
+</div>
+</div>
+<p>The coordinates are placed on the images like in the above figure. Notice the y-axis is inverted compared to the height axis of the picture.</p>
+<p>Let us create a function that identifies the patches of the image according to the positions of the boxes with the <code class="docutils literal notranslate"><span class="pre">crop</span></code> function.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/utils/get_patches.py
+
+<span class="kn">from</span> <span class="nn">PIL.JpegImagePlugin</span> <span class="kn">import</span> <span class="n">JpegImageFile</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="k">def</span> <span class="nf">get_patches</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">JpegImageFile</span><span class="p">,</span> <span class="n">n_patches</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+
+    <span class="c1"># get height and width of the image</span>
+    <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span>
+
+    <span class="c1"># let us calculate the number of divisions to make to the width and height of the image</span>
+    <span class="n">n_patch</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sqrt</span><span class="p">(</span><span class="n">n_patches</span><span class="p">))</span>
+
+    <span class="n">patch_h</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="n">n_patch</span><span class="p">)</span> <span class="c1"># notice that the height must be divisible by the number of divisions</span>
+
+    <span class="n">patch_w</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="n">n_patch</span><span class="p">)</span> <span class="c1"># notice that the width must be divisible by the number of divisions</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Height and width of each patch: </span><span class="si">{</span><span class="p">(</span><span class="n">patch_h</span><span class="p">,</span><span class="w"> </span><span class="n">patch_w</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># we will find the first coordinates of the boxes with product function of itertools</span>
+    <span class="n">first_coordinates</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">patch_h</span> <span class="o">*</span> <span class="n">n_patch</span><span class="p">,</span> <span class="n">patch_h</span><span class="p">),</span>
+                                        <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">patch_w</span> <span class="o">*</span> <span class="n">n_patch</span><span class="p">,</span> <span class="n">patch_w</span><span class="p">)))</span>
+
+    <span class="n">patches</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">pos1</span><span class="p">,</span> <span class="n">pos2</span> <span class="ow">in</span> <span class="n">first_coordinates</span><span class="p">:</span>
+
+        <span class="n">box</span> <span class="o">=</span> <span class="p">(</span><span class="n">pos2</span><span class="p">,</span> <span class="n">pos1</span><span class="p">,</span> <span class="n">pos2</span> <span class="o">+</span> <span class="n">patch_w</span><span class="p">,</span> <span class="n">pos1</span> <span class="o">+</span> <span class="n">patch_h</span><span class="p">)</span>
+
+        <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">crop</span><span class="p">(</span><span class="n">box</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">patches</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/utils/get_patches.py
+</pre></div></div>
+</div>
+<p>Let us recuperate the patches.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/utils/get_patches.py
+
+<span class="n">patches</span> <span class="o">=</span> <span class="n">get_patches</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Height and width of each patch: (37, 37)
+</pre></div></div>
+</div>
+<p>We obtain the following patches.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">n_patch</span><span class="p">,</span> <span class="n">n_patch</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">18</span><span class="p">,</span> <span class="mi">18</span><span class="p">))</span>
+
+<span class="n">fig</span><span class="o">.</span><span class="n">patch</span><span class="o">.</span><span class="n">set_facecolor</span><span class="p">(</span><span class="s1">&#39;white&#39;</span><span class="p">)</span>
+
+<span class="n">axes</span> <span class="o">=</span> <span class="n">axes</span><span class="o">.</span><span class="n">flat</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">patches</span><span class="p">)):</span>
+
+    <span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">patches</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+    <span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Patch </span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_preprocessing_and_loading_23_0.png" src="../_images/notebooks_preprocessing_and_loading_23_0.png" />
+</div>
+</div>
+<p>The size of a patch is <span class="math notranslate nohighlight">\((37, 37)\)</span>; however, knowing that the ViT Model accepts only patches of size <span class="math notranslate nohighlight">\((14, 14)\)</span>. Then our images must be resized to match that of the original images.</p>
+<hr class="docutils" />
+<p>To resize the images, we can use the <code class="docutils literal notranslate"><span class="pre">box</span> <span class="pre">filter</span></code> to down-scale them. The box filter calculates the average values inside a box (the same boxes we defined earlier). To obtain that result, we can modify the function we created to get the patches and use <code class="docutils literal notranslate"><span class="pre">numpy</span></code> to calculate the mean of the pixels. We do that because the size of the images is greater than that of the base images of the ViT Model’s pre-training. But if the size of our photos were smaller, we would use more sophisticated methods
+to resample the images like <strong>the cubic</strong>, <strong>the nearest neighbor</strong>, <strong>the bilinear</strong> interpolations, or the up-scaler <strong>box</strong> method. We will explain them in another notebook. For now, let us create a function that takes an image and down-scale it to the correct size.</p>
+<p>Notice that dividing the height of our images by the height of the original image and doing so for the widths will give us the following value <span class="math notranslate nohighlight">\(600 / 224 = 2.67\)</span>. That value represents the boxes’ height and width in order to downscale the images. But it is impossible to use it since it is a decimal number. To solve the issue, we will take the boxes’ height and width to be round of the value found, equal to <span class="math notranslate nohighlight">\(3\)</span>. Then using that boxes, we will obtain a height and width of
+<span class="math notranslate nohighlight">\(600 / 3 = 200\)</span> for the rescaled images, which is not equal to <span class="math notranslate nohighlight">\(224\)</span>. Then, we must add paddings to the bottom and right sides of the pictures to obtain the correct size. The number of pixels to add at each side equals <span class="math notranslate nohighlight">\((224 - 200) * 3 = 72\)</span>.</p>
+<p>For the study, let us create a black image with a height and a width of <span class="math notranslate nohighlight">\(600 + 72 = 672\)</span> and add it to the image we want to rescale.</p>
+<p><strong>Remark</strong>: There are better methods than adding paddings to the images to obtain the correct size. Another technique is used in the pre-implemented feature extraction pipeline available in HugginFace.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># let us create an empty image</span>
+<span class="n">pad_image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">672</span><span class="p">,</span> <span class="mi">672</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">)</span>
+
+<span class="c1"># place the previous image inside it</span>
+<span class="n">pad_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+
+<span class="c1"># we obtain</span>
+<span class="n">pad_image</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_preprocessing_and_loading_28_0.png" src="../_images/notebooks_preprocessing_and_loading_28_0.png" />
+</div>
+</div>
+<p>Now let us modify the previous function to rescale the image with the methods that we defined earlier.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/utils/downscale_image.py
+
+<span class="kn">from</span> <span class="nn">PIL.JpegImagePlugin</span> <span class="kn">import</span> <span class="n">JpegImageFile</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="k">def</span> <span class="nf">downscale_image</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">JpegImageFile</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)):</span>
+
+    <span class="k">assert</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">%</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">%</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="c1"># get box size</span>
+    <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Height and width of each box: </span><span class="si">{</span><span class="p">(</span><span class="n">height</span><span class="p">,</span><span class="w"> </span><span class="n">width</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># we will concatenate the patches over the height axis (axis 0)</span>
+    <span class="n">patches</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">):</span>
+
+        <span class="c1"># we must recuperate each width division in order to concatenate the results (on axis 1)</span>
+        <span class="n">h_div</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">height</span><span class="p">,</span> <span class="n">height</span><span class="p">):</span>
+
+            <span class="n">box</span> <span class="o">=</span> <span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="o">+</span> <span class="n">width</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="n">height</span><span class="p">)</span>
+
+            <span class="n">current_box</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">crop</span><span class="p">(</span><span class="n">box</span><span class="p">)</span>
+
+            <span class="c1"># let us convert the box to a numpy array and calculate the mean</span>
+            <span class="n">current_box</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">current_box</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+
+            <span class="c1"># add to h_div</span>
+            <span class="n">h_div</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current_box</span><span class="p">)</span>
+
+        <span class="c1"># concatenate over width axis</span>
+        <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">h_div</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">0</span><span class="p">))</span>
+
+    <span class="c1"># concatenate over the height axis and transform to a pillow image</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">patches</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)))</span>
+
+    <span class="k">return</span> <span class="n">image</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/utils/downscale_image.py
+</pre></div></div>
+</div>
+<p>Let us downscale the image.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/utils/downscale_image.py
+
+<span class="n">dscale_image</span> <span class="o">=</span> <span class="n">downscale_image</span><span class="p">(</span><span class="n">pad_image</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Height and width of each box: (3, 3)
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">draw</span> <span class="o">=</span> <span class="n">ImageDraw</span><span class="o">.</span><span class="n">Draw</span><span class="p">(</span><span class="n">dscale_image</span><span class="p">)</span>
+
+<span class="n">draw</span><span class="o">.</span><span class="n">text</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">224</span> <span class="o">-</span> <span class="mi">15</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;size: </span><span class="si">{</span><span class="n">dscale_image</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">dscale_image</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_preprocessing_and_loading_33_0.png" src="../_images/notebooks_preprocessing_and_loading_33_0.png" />
+</div>
+</div>
+<p>We obtain then an image with the right size</p>
+<hr class="docutils" />
+</section>
+</section>
+<section id="Custom-dataset">
+<h2>Custom dataset<a class="headerlink" href="#Custom-dataset" title="Permalink to this heading">#</a></h2>
+<p>The custom dataset will recuperate as arguments the path of the images, the label weights, and a transformer. It has the following signature:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FakeFaceDetectionDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">transformer</span><span class="p">):</span>
+
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;data/real_and_fake_face/training_fake/easy_100_1111.jpg&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">img</span><span class="p">:</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+&lt;PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=600x600 at 0x200C58E4310&gt;
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/data/fake_face_dataset.py
+
+<span class="kn">from</span> <span class="nn">fake_face_detection.utils.compute_weights</span> <span class="kn">import</span> <span class="n">compute_weights</span>
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="k">class</span> <span class="nc">FakeFaceDetectionDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fake_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">real_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">transformer</span><span class="p">,</span> <span class="o">**</span><span class="n">transformer_kwargs</span><span class="p">):</span>
+
+        <span class="c1"># let us load the images</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fake_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">real_images</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">real_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_images</span>
+
+        <span class="c1"># let us recuperate the labels</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fake_labels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">id_map</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">])]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">real_labels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">id_map</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_images</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fake_labels</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_labels</span>
+
+        <span class="c1"># let us recuperate the weights</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">compute_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">))</span>
+
+        <span class="c1"># let us recuperate the transformer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span> <span class="o">=</span> <span class="n">transformer</span>
+
+        <span class="c1"># let us recuperate the length</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+
+        <span class="c1"># let us recuperate the transformer kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer_kwargs</span> <span class="o">=</span> <span class="n">transformer_kwargs</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+
+        <span class="c1"># let us recuperate an image</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+
+        <span class="k">with</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> <span class="k">as</span> <span class="n">img</span><span class="p">:</span>
+
+            <span class="c1"># let us recuperate a label</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+
+            <span class="c1"># let us add a transformation on the images</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span><span class="p">:</span>
+
+                <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">transformer_kwargs</span><span class="p">)</span>
+
+        <span class="c1"># let us add the label inside the obtained dictionary</span>
+        <span class="n">image</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">label</span>
+
+        <span class="k">return</span> <span class="n">image</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/data/fake_face_dataset.py
+</pre></div></div>
+</div>
+<p>Let us initialize the dataset and load some data.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">fake_face_detection.data.fake_face_dataset</span> <span class="kn">import</span> <span class="n">FakeFaceDetectionDataset</span>
+<span class="kn">from</span> <span class="nn">fake_face_detection.utils.compute_weights</span> <span class="kn">import</span> <span class="n">compute_weights</span>
+</pre></div>
+</div>
+</div>
+<p>We must load the ViT Model’s preprocessing method, which is already trained and available with the HuggingFace’s API.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># import the vit&#39;s feature extraction class of Hugging Face</span>
+<span class="kn">from</span> <span class="nn">transformers</span> <span class="kn">import</span> <span class="n">ViTFeatureExtractor</span>
+
+<span class="c1"># define the path of the pre-trained model</span>
+<span class="n">vit_path</span> <span class="o">=</span> <span class="s1">&#39;google/vit-base-patch16-224-in21k&#39;</span>
+
+<span class="c1"># recuperate the feature extractor</span>
+<span class="n">feature_extractor</span> <span class="o">=</span> <span class="n">ViTFeatureExtractor</span><span class="p">(</span><span class="n">vit_path</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Let us print the enabled preprocessing pipeline.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">feature_extractor</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+ViTFeatureExtractor {
+  &#34;do_normalize&#34;: true,
+  &#34;do_rescale&#34;: true,
+  &#34;do_resize&#34;: &#34;google/vit-base-patch16-224-in21k&#34;,
+  &#34;image_mean&#34;: [
+    0.5,
+    0.5,
+    0.5
+  ],
+  &#34;image_processor_type&#34;: &#34;ViTFeatureExtractor&#34;,
+  &#34;image_std&#34;: [
+    0.5,
+    0.5,
+    0.5
+  ],
+  &#34;resample&#34;: 2,
+  &#34;rescale_factor&#34;: 0.00392156862745098,
+  &#34;size&#34;: {
+    &#34;height&#34;: 224,
+    &#34;width&#34;: 224
+  }
+}
+</pre></div></div>
+</div>
+<p>We can see that it uses the following preprocessing steps:</p>
+<ul class="simple">
+<li><p>Resizing the images to <strong>(224, 224, 3)</strong> with the <strong>Box</strong> Resampling Strategy.</p></li>
+<li><p>Multiplying the images by a rescale factor of <span class="math notranslate nohighlight">\(0.00392156862745098 = \frac{1}{255}\)</span> to normalize them.</p></li>
+<li><p>Standardize the images using the means of <span class="math notranslate nohighlight">\(0.5\)</span> and a standard deviation of <span class="math notranslate nohighlight">\(0.5\)</span> for each color.</p></li>
+</ul>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/data/fake_face_dataset.py
+
+<span class="c1"># let us initialize the path</span>
+<span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;data/real_and_fake_face&quot;</span>
+
+<span class="c1"># let us load the characteristics</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;data/extractions/fake_real_dict.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+
+    <span class="n">depick</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">Unpickler</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="n">characs</span> <span class="o">=</span> <span class="n">depick</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+
+<span class="n">ffd_dataset</span> <span class="o">=</span> <span class="n">FakeFaceDetectionDataset</span><span class="p">(</span><span class="n">fake_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/training_fake&quot;</span><span class="p">,</span> <span class="n">real_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/training_real&quot;</span><span class="p">,</span>
+                                       <span class="n">id_map</span> <span class="o">=</span> <span class="n">characs</span><span class="p">[</span><span class="s1">&#39;ids&#39;</span><span class="p">],</span> <span class="n">transformer</span><span class="o">=</span><span class="n">feature_extractor</span><span class="p">,</span> <span class="n">transformer_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;return_tensors&#39;</span><span class="p">:</span> <span class="s1">&#39;pt&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># load 10 images</span>
+<span class="n">images</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">DataLoader</span><span class="p">(</span><span class="n">ffd_dataset</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">)))</span>
+
+<span class="c1"># display the shape of the images&#39; tensor and the labels</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Images&#39; tensor shape: </span><span class="si">{</span><span class="n">images</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="se">\n</span><span class="s2">Labels: </span><span class="si">{</span><span class="n">images</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Images&#39; tensor shape: torch.Size([10, 3, 224, 224])
+Labels: tensor([0, 0, 1, 0, 1, 1, 0, 1, 1, 0])
+</pre></div></div>
+</div>
+<p>Let us implement the data collator function below. It will be passed as a parameter to ViT Trainer.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[25]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/data/collator.py
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="k">def</span> <span class="nf">fake_face_collator</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The data collator for training vision transformer models on fake and real face dataset</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        batch (list): A dictionary containing the pixel values and the labels</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: The final dictionary</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">new_batch</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;pixel_values&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s1">&#39;labels&#39;</span><span class="p">:</span> <span class="p">[]</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+
+        <span class="n">pixel_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> \
+            <span class="k">else</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pixel_values</span><span class="p">)</span>
+
+        <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]))</span>
+
+    <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">])</span>
+
+    <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">new_batch</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/data/collator.py
+</pre></div></div>
+</div>
+</section>
+<section id="Loss-function">
+<h2>Loss function<a class="headerlink" href="#Loss-function" title="Permalink to this heading">#</a></h2>
+<p>We must create a function that returns a custom trainer after attributing weight to the loss function.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/trainers/custom_trainer.py
+
+<span class="kn">from</span> <span class="nn">transformers</span> <span class="kn">import</span> <span class="n">Trainer</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+
+<span class="k">def</span> <span class="nf">get_custom_trainer</span><span class="p">(</span><span class="n">weights</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+
+    <span class="k">class</span> <span class="nc">CustomTrainer</span><span class="p">(</span><span class="n">Trainer</span><span class="p">):</span> <span class="c1"># got from https://huggingface.co/docs/transformers/main_classes/trainer</span>
+
+        <span class="k">def</span> <span class="nf">compute_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">return_outputs</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+
+            <span class="c1"># recuperate labels</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="n">inputs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;labels&quot;</span><span class="p">)</span>
+
+            <span class="c1"># forward pass</span>
+            <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
+
+            <span class="c1"># recuperate logits</span>
+            <span class="n">logits</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;logits&quot;</span><span class="p">)</span>
+
+            <span class="c1"># compute custom loss (passing the weights)</span>
+            <span class="n">loss_fct</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">weight</span><span class="o">=</span><span class="n">weights</span><span class="p">)</span>
+
+            <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fct</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_labels</span><span class="p">),</span> <span class="n">labels</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+
+            <span class="k">return</span> <span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">outputs</span><span class="p">)</span> <span class="k">if</span> <span class="n">return_outputs</span> <span class="k">else</span> <span class="n">loss</span>
+
+    <span class="k">return</span> <span class="n">CustomTrainer</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/trainers/custom_trainer.py
+</pre></div></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/trainers/custom_trainer.py
+</pre></div>
+</div>
+</div>
+<p>Let us try to recuperate the custom trainer with the current weights.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[24]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">Trainer</span> <span class="o">=</span> <span class="n">get_custom_trainer</span><span class="p">(</span><span class="n">ffd_dataset</span><span class="o">.</span><span class="n">weights</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>The weights can be saved to be used when training the model.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[25]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;data/extractions/weights.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+
+    <span class="n">pick</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">Pickler</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="n">pick</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">ffd_dataset</span><span class="o">.</span><span class="n">weights</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="split_dataset.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Split data 🫧</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="generate_and_visualize.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Generation and Exploration of the images 🔎</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2023, Oumar Kane
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Preprocessing and loading ⚗️</a><ul>
+<li><a class="reference internal" href="#Preprocessing">Preprocessing</a><ul>
+<li><a class="reference internal" href="#Normalization">Normalization</a></li>
+<li><a class="reference internal" href="#Resizing-and-resampling-strategies">Resizing and resampling strategies</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#Custom-dataset">Custom dataset</a></li>
+<li><a class="reference internal" href="#Loss-function">Loss function</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/scripts/furo.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </body>
+</html>
