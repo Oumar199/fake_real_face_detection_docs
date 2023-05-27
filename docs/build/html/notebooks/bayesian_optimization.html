@@ -242,9 +242,9 @@ covariance matrix <span class="math notranslate nohighlight">\(\Sigma\)</span>. 
 </div>
 <section id="Objective-function">
 <h2>Objective function<a class="headerlink" href="#Objective-function" title="Permalink to this heading">#</a></h2>
-<p>We will use the <code class="docutils literal notranslate"><span class="pre">MSELoss</span></code> to calculate the value returned by the objective function, which is our training function. It will calculate the mean squared error between values predicted from a feed-forward neural network and pre-defined target values. The input and target values are randomly initialized from a Gaussian distribution. We will need input data of 8 variables and 100 samples (not very large, not fast up the training). The following parameters will be necessary for a sample example:</p>
+<p>We will use the <code class="docutils literal notranslate"><span class="pre">MSELoss</span></code> to calculate the value returned by the objective function, which is our training function. It will calculate the mean squared error between values predicted from a feed-forward neural network and pre-defined target values. The input and target values are randomly initialized from a Gaussian distribution. We will need input data of 8 variables and 100 samples (not very large, not fast up the training). The following parameters will be necessary for a simple example:</p>
 <ul class="simple">
-<li><p>The number of epochs -&gt; … [1, 10]</p></li>
+<li><p>The number of epochs -&gt; values in the interval [1, 10]</p></li>
 <li><p>The number of layers -&gt; … [1, 4]</p></li>
 <li><p>The number of features -&gt; … [40, 100]</p></li>
 <li><p>The learning rate -&gt; … [1e-1, 1e-4]</p></li>
