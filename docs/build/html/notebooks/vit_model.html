@@ -1,161 +1,52 @@
-<!doctype html>
-<html class="no-js" lang="en">
-  <head><meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Deploy the ViT Model 🚀" href="deploy_to_hugging_face.html" /><link rel="prev" title="Split data 🫧" href="split_dataset.html" />
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <!-- Generated with Sphinx 6.2.1 and Furo 2023.05.20 -->
-        <title>Vision Transformer Model + Configuration and Metrics 👓 - Fake and Real Face Detection with ViT 0.0.1 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?digest=e6660623a769aa55fea372102b9bf3151b292993" />
-    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
-    
-    
-
-
-<style>
-  body {
-    --color-code-background: #f8f8f8;
-  --color-code-foreground: black;
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision Transformer Model + Configuration and Metrics 👓 &mdash; Fake and Real Face Detection with ViT 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/nbsphinx-code-cells.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
   
-  }
-  @media not print {
-    body[data-theme="dark"] {
-      --color-code-background: #202020;
-  --color-code-foreground: #d0d0d0;
-  
-    }
-    @media (prefers-color-scheme: dark) {
-      body:not([data-theme="light"]) {
-        --color-code-background: #202020;
-  --color-code-foreground: #d0d0d0;
-  
-      }
-    }
-  }
-</style></head>
-  <body>
-    
-    <script>
-      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
-    </script>
-    
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+        <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Deploy the ViT Model 🚀" href="deploy_to_hugging_face.html" />
+    <link rel="prev" title="Split data 🫧" href="split_dataset.html" /> 
+</head>
 
-<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
-  <symbol id="svg-toc" viewBox="0 0 24 24">
-    <title>Contents</title>
-    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
-      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
-    </svg>
-  </symbol>
-  <symbol id="svg-menu" viewBox="0 0 24 24">
-    <title>Menu</title>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
-      <line x1="3" y1="12" x2="21" y2="12"></line>
-      <line x1="3" y1="6" x2="21" y2="6"></line>
-      <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>
-  </symbol>
-  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
-    <title>Expand</title>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
-      <polyline points="9 18 15 12 9 6"></polyline>
-    </svg>
-  </symbol>
-  <symbol id="svg-sun" viewBox="0 0 24 24">
-    <title>Light mode</title>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
-      <circle cx="12" cy="12" r="5"></circle>
-      <line x1="12" y1="1" x2="12" y2="3"></line>
-      <line x1="12" y1="21" x2="12" y2="23"></line>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-      <line x1="1" y1="12" x2="3" y2="12"></line>
-      <line x1="21" y1="12" x2="23" y2="12"></line>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-    </svg>
-  </symbol>
-  <symbol id="svg-moon" viewBox="0 0 24 24">
-    <title>Dark mode</title>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
-    </svg>
-  </symbol>
-  <symbol id="svg-sun-half" viewBox="0 0 24 24">
-    <title>Auto light/dark mode</title>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M13 12h5" />
-      <path d="M13 15h4" />
-      <path d="M13 18h1" />
-      <path d="M13 9h4" />
-      <path d="M13 6h1" />
-    </svg>
-  </symbol>
-</svg>
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
 
-<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
-<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
-<label class="overlay sidebar-overlay" for="__navigation">
-  <div class="visually-hidden">Hide navigation sidebar</div>
-</label>
-<label class="overlay toc-overlay" for="__toc">
-  <div class="visually-hidden">Hide table of contents sidebar</div>
-</label>
-
-
-
-<div class="page">
-  <header class="mobile-header">
-    <div class="header-left">
-      <label class="nav-overlay-icon" for="__navigation">
-        <div class="visually-hidden">Toggle site navigation sidebar</div>
-        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
-      </label>
-    </div>
-    <div class="header-center">
-      <a href="../index.html"><div class="brand">Fake and Real Face Detection with ViT 0.0.1 documentation</div></a>
-    </div>
-    <div class="header-right">
-      <div class="theme-toggle-container theme-toggle-header">
-        <button class="theme-toggle">
-          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
-          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
-          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
-          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
-        </button>
-      </div>
-      <label class="toc-overlay-icon toc-header-icon" for="__toc">
-        <div class="visually-hidden">Toggle table of contents sidebar</div>
-        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
-      </label>
-    </div>
-  </header>
-  <aside class="sidebar-drawer">
-    <div class="sidebar-container">
-      
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
-  
-  
-  <span class="sidebar-brand-text">Fake and Real Face Detection with ViT 0.0.1 documentation</span>
-  
-</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
-  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
-  <input type="hidden" name="check_keywords" value="yes">
-  <input type="hidden" name="area" value="default">
-</form>
-<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Fake and Real Face Detection with ViT
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
@@ -163,44 +54,41 @@
 <li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
 <li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
 <li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Vision Transformer Model + Configuration and Metrics 👓</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Vision Transformer Model + Configuration and Metrics 👓</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#Architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Attention">Attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Metrics-and-predictions">Metrics and predictions</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
 </ul>
 
-</div>
-</div>
-
-      </div>
-      
-    </div>
-  </aside>
-  <div class="main">
-    <div class="content">
-      <div class="article-container">
-        <a href="#" class="back-to-top muted-link">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
-          </svg>
-          <span>Back to top</span>
-        </a>
-        <div class="content-icon-container">
-          
-<div class="theme-toggle-container theme-toggle-content">
-            <button class="theme-toggle">
-              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
-              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
-              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
-              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
-            </button>
-          </div>
-          <label class="toc-overlay-icon toc-content-icon" for="__toc">
-            <div class="visually-hidden">Toggle table of contents sidebar</div>
-            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
-          </label>
         </div>
-        <article role="main">
-          <section id="Vision-Transformer-Model-+-Configuration-and-Metrics-👓">
-<h1>Vision Transformer Model + Configuration and Metrics 👓<a class="headerlink" href="#Vision-Transformer-Model-+-Configuration-and-Metrics-👓" title="Permalink to this heading">#</a></h1>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Fake and Real Face Detection with ViT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Vision Transformer Model + Configuration and Metrics 👓</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/notebooks/vit_model.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="Vision-Transformer-Model-+-Configuration-and-Metrics-👓">
+<h1>Vision Transformer Model + Configuration and Metrics 👓<a class="headerlink" href="#Vision-Transformer-Model-+-Configuration-and-Metrics-👓" title="Permalink to this heading"></a></h1>
 <p>The ViT Model is based on the architecture of the Transformer introduced by Vaswani et al. in the article <em>Attention Is All You Need</em>. While the original Transformer is commonly used for NLP tasks, the ViT Model was implemented to work on images like with Convolution Neural Networks. The Transformer initially took a sequence of vectors converted to an embedding vector of fixed features’ size before being added to a 1-dimensional positional vector which learned to identify the position of each
 element in the sequence. In the ViT Model, the series comprises the patches we define in the following notebook <a class="reference internal" href="preprocessing_and_loading.html"><span class="doc">preprocessing_and_loading</span></a>. Each patch must be flattened for we obtain an input sequence of size <span class="math notranslate nohighlight">\((N\times (D^2.C))\)</span>, where <span class="math notranslate nohighlight">\(N\)</span> is the number of patches, D is the size of the height and width of the patches, and <span class="math notranslate nohighlight">\(C\)</span> is the number of channels.</p>
 <p>To make transfer learning with the pre-trained model, the classification layer composed of two linear layers and a GeLU activation will take as enter the output of the encoder reshaped to <span class="math notranslate nohighlight">\((batch\_size, Sequence\_size \times Model size)\)</span> to give us a final output of <span class="math notranslate nohighlight">\((batch\_size, number\_of\_labels)\)</span>. Only the weights of the classifier are randomly initialized to be trained on new images.</p>
@@ -250,7 +138,7 @@ Global seed set to 0
 </pre></div></div>
 </div>
 <section id="Architecture">
-<h2>Architecture<a class="headerlink" href="#Architecture" title="Permalink to this heading">#</a></h2>
+<h2>Architecture<a class="headerlink" href="#Architecture" title="Permalink to this heading"></a></h2>
 <p>The path or name of the ViT Model must be indicated to be loaded. We want to recuperate the base model pre-trained by Google on ImageNet21k’s images of size <span class="math notranslate nohighlight">\((224\times 224)\)</span> and requiring <span class="math notranslate nohighlight">\(16\)</span> patches. We need to indicate the following name: <code class="docutils literal notranslate"><span class="pre">google/vit-base-patch16-224-in21k</span></code>. We will also provide the number of labels which is <code class="docutils literal notranslate"><span class="pre">2</span></code> in our case, and we need to give the class Ids that we recuperated in <a class="reference internal" href="generate_and_visualize.html"><span class="doc">generate_an_visualize</span></a>.</p>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
@@ -300,10 +188,8 @@ You should probably TRAIN this model on a down-stream task to be able to use it 
 <p>The id map that was provided earlier will be used to predict the test set.</p>
 <p>The main differences between the original Transformer and the current Transformer are that the, later on, uses a convolution layer to obtain the projections, only an encoder stack is required, a pre-layer normalization is used in place of a post-layer normalization, a final <code class="docutils literal notranslate"><span class="pre">Multi-Layer</span> <span class="pre">Perceptron</span></code> (MLP) is added to classify the images from the outputs or state of the encoder and each feed-forward network use as activation function the <code class="docutils literal notranslate"><span class="pre">GeLU</span></code> in place of the <code class="docutils literal notranslate"><span class="pre">ReLU</span></code> activation. The <code class="docutils literal notranslate"><span class="pre">GeLU</span></code>
 activation can be approximated by</p>
-<div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[GeLU(x) = 0.5x(1 + tanh[\sqrt{2\pi}(x + 0.044715x^3)])\]</div>
-</div>
 <p>where <span class="math notranslate nohighlight">\(x\)</span> is the input to the <span class="math notranslate nohighlight">\(GeLU\)</span> activation. It provides a smoother function than the <code class="docutils literal notranslate"><span class="pre">ReLU.</span></code></p>
 <p>Let us display the whole architecture below.</p>
 <div class="nbinput docutils container">
@@ -628,23 +514,17 @@ ViTForImageClassification(
 </div>
 </section>
 <section id="Attention">
-<h2>Attention<a class="headerlink" href="#Attention" title="Permalink to this heading">#</a></h2>
+<h2>Attention<a class="headerlink" href="#Attention" title="Permalink to this heading"></a></h2>
 <p>An attention matrix is provided by the Multi-head-attention of the last encoder layer and corresponds to the attention that was computed on each pixel of the image. It corresponds to two main series of concatenations between sub-attentions calculated inside the Multi-Head Attentions. Inside each Multi-Head Attention, we have Self-attention, which takes some linear transformations from the input sequence: the queries <span class="math notranslate nohighlight">\(q\)</span>, the values <span class="math notranslate nohighlight">\(v\)</span>, and the keys <span class="math notranslate nohighlight">\(k\)</span>. It then computes the
 correlation between the queries and the keys as follows:</p>
-<div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[attention_1 = \frac{q \times k^T}{\sqrt{hidden\_size}}\]</div>
-</div>
 <p>The correlation matrix of dimension <span class="math notranslate nohighlight">\((s_1, s_2)\)</span>, where <span class="math notranslate nohighlight">\(s_1 = s_2 = s\)</span> is the sequence length, is transformed into a matrix of probabilities defining the attention weight each element in sequence gives to others. It is obtained with the softmax function applied on the second dimension of the correlation matrix:</p>
-<div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[attention_2 = \frac{\exp(-attention_1)}{\sum_{s_2} \exp(-attention_1)}\]</div>
-</div>
 <p>The final attention, which defines the most critical pixels in an image, is calculated by multiplying the attention weights of an element by each of their corresponding part of the sequence, summing over the results of that multiplications and concatenating all the summations made (each provide a vector of dimension <span class="math notranslate nohighlight">\((s, d_v)\)</span> where <span class="math notranslate nohighlight">\(d_v = d_k = d_q\)</span> is the dimension of the values and is equal to that of the keys and queries):</p>
-<div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[attention_h = attention_2 \times v\]</div>
-</div>
 <p>The <span class="math notranslate nohighlight">\(h\)</span> index indicates that we calculate the attention of a <span class="math notranslate nohighlight">\(h^{th}\)</span> head. The concatenation between all the attentions is fed to the rest of the encoder layer process.</p>
 <p>To visualize the attention, we will recuperate the output attention after the softmax function (<span class="math notranslate nohighlight">\(attention_2\)</span>) of the last encoder layer of dimension <span class="math notranslate nohighlight">\((batch\_size, num\_heads, s, s)\)</span> and take the attention provided by the previous element to each element in the sequence that we need to reshape to <span class="math notranslate nohighlight">\((batch\_size, num\_heads, patch\_size \times patch\_size)\)</span> (Notice that we didn’t add the batch size in the attention dimensions to simplify the explanation). The attention is
 resized to match the original image and visualized with <code class="docutils literal notranslate"><span class="pre">matplotlib.</span></code> Notice that the first dimension is of size <span class="math notranslate nohighlight">\(num\_heads\)</span>; we must then take the average over that dimension to obtain a final attention matrix of dimension <span class="math notranslate nohighlight">\((batch\_size, 1, image\_height, image\_width)\)</span>. It will be multiplied with the original image for more precise visualization. Let us make an example with a random image from the dataset.</p>
@@ -755,7 +635,7 @@ resized to match the original image and visualized with <code class="docutils li
 <p>We obtained the above result because we still needed to train the model on the images. Let us create in the next section a function that makes us visualize the most critical pixels in the test set’s images.</p>
 </section>
 <section id="Metrics-and-predictions">
-<h2>Metrics and predictions<a class="headerlink" href="#Metrics-and-predictions" title="Permalink to this heading">#</a></h2>
+<h2>Metrics and predictions<a class="headerlink" href="#Metrics-and-predictions" title="Permalink to this heading"></a></h2>
 <p>Let us create a function to compute the <code class="docutils literal notranslate"><span class="pre">accuracy,</span></code> the <code class="docutils literal notranslate"><span class="pre">f1-score</span></code>, and the <code class="docutils literal notranslate"><span class="pre">auc</span></code> at each training iteration.</p>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
@@ -1101,82 +981,35 @@ Overwriting fake-face-detection/fake_face_detection/metrics/make_predictions.py
 </section>
 </section>
 
-        </article>
-      </div>
-      <footer>
-        
-        <div class="related-pages">
-          <a class="next-page" href="deploy_to_hugging_face.html">
-              <div class="page-info">
-                <div class="context">
-                  <span>Next</span>
-                </div>
-                <div class="title">Deploy the ViT Model 🚀</div>
-              </div>
-              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
-            </a>
-          <a class="prev-page" href="split_dataset.html">
-              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
-              <div class="page-info">
-                <div class="context">
-                  <span>Previous</span>
-                </div>
-                
-                <div class="title">Split data 🫧</div>
-                
-              </div>
-            </a>
-        </div>
-        <div class="bottom-of-page">
-          <div class="left-details">
-            <div class="copyright">
-                Copyright &#169; 2023, Oumar Kane
-            </div>
-            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
-            
-            <a href="https://github.com/pradyunsg/furo">Furo</a>
-            
-          </div>
-          <div class="right-details">
-            
-          </div>
-        </div>
-        
-      </footer>
-    </div>
-    <aside class="toc-drawer">
-      
-      
-      <div class="toc-sticky toc-scroll">
-        <div class="toc-title-container">
-          <span class="toc-title">
-            On this page
-          </span>
-        </div>
-        <div class="toc-tree-container">
-          <div class="toc-tree">
-            <ul>
-<li><a class="reference internal" href="#">Vision Transformer Model + Configuration and Metrics 👓</a><ul>
-<li><a class="reference internal" href="#Architecture">Architecture</a></li>
-<li><a class="reference internal" href="#Attention">Attention</a></li>
-<li><a class="reference internal" href="#Metrics-and-predictions">Metrics and predictions</a></li>
-</ul>
-</li>
-</ul>
 
+           </div>
           </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="split_dataset.html" class="btn btn-neutral float-left" title="Split data 🫧" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="deploy_to_hugging_face.html" class="btn btn-neutral float-right" title="Deploy the ViT Model 🚀" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Oumar Kane.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
         </div>
       </div>
-      
-      
-    </aside>
+    </section>
   </div>
-</div><script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/sphinx_highlight.js"></script>
-    <script src="../_static/scripts/furo.js"></script>
-    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    </body>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
 </html>

@@ -5,7 +5,7 @@
 
 # Fake and real face detection with ViT
 
-```{include} ../../context_of_the_project.md
+```{include} ../../context_of_the_project_.md
 :relative-images
 ```
 
