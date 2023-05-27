@@ -1,8 +1,6 @@
 # Usage 
 
-### Installation
-
-The package of the project is a
+## Installation
 
 The `fake_face_detection` package contains functions and classes used for making exploration, pre-processing, visualization, training, searching for the best model, etc. It is available in the following GitHub repository [Fake_face_detection](https://github.com/Oumar199/fake_face_detection_ViT), and you install it with the following steps:
 
@@ -28,7 +26,7 @@ $ pip install -r requirements.txt
 $ pip install -e fake-face-detection
 ```
 
-### Example
+## Example
 
 After installing the package, you can test it by creating a Python file named <i style="color:orange">optimization</i> and add the following code inside the file to optimize the parameters of your objective function:
 ```python

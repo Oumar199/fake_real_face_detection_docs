@@ -6,4 +6,5 @@ streamlit
 tokenizers
 torch
 transformers
+sphinx-autobuild
 

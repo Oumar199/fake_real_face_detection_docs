@@ -39,7 +39,7 @@
     "- The first part indicates the quality of the Photoshop or the difficulty of recognizing that it is fake;\n",
     "- The second part indicates the identification number of the image;\n",
     "- The third and final part indicates the modified segment of the face in binary digits with the following signature -> \n",
-    "```json\n",
+    "```python\n",
     "[bit_left_eye, bit_right_eye, bit_nose, bit_mouth]\n",
     "```\n",
     "\n",
