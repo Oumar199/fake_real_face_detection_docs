@@ -507,7 +507,7 @@
     "attention_2 = \\frac{\\exp(-attention_1)}{\\sum_{s_2} \\exp(-attention_1)}\n",
     "$$\n",
     "\n",
-    "The final attention, which defines the most critical pixels in an image, is calculated by multiplying the attention weights of an element by each of their corresponding part of the sequence, summing over the results of that multiplications and concatenating all the summations made (each provide a vector of dimension $(s, d_v)$ where $d_v = d_k = d_q$ is the dimension of the values and is equal to that of the keys and queries):\n",
+    "The final attention, which defines the most critical pixels in an image, is calculated by multiplying the attention weights of an element by each of their corresponding part of the sequence, summing over the results of that multiplications and concatenating all the summations made (each provides a vector of dimension $(s, d_v)$ where $d_v = d_k = d_q$ is the dimension of the values and is equal to that of the keys and queries):\n",
     "\n",
     "$$\n",
     "attention_h = attention_2 \\times v\n",

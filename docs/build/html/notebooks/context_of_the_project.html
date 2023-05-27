@@ -159,7 +159,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Real and Fake Face Detection (RFFD)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
 <li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
 <li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
@@ -207,34 +207,32 @@
 <ul class="simple">
 <li><p>The first part indicates the quality of the Photoshop or the difficulty of recognizing that it is fake;</p></li>
 <li><p>The second part indicates the identification number of the image;</p></li>
-<li><p>The third and final part indicates the modified segment of the face in binary digits with the following signature -&gt;</p></li>
+<li><p>The third and final part indicates the modified segment of the face in binary digits with the following signature -&gt; <span class="math notranslate nohighlight">\(\color{orange}[bit\_left\_eye,\space bit\_right\_eye,\space bit\_nose,\space bit\_mouth]\)</span>.</p></li>
 </ul>
-<p>[bit_left_eye, bit_right_eye, bit_nose, bit_mouth]</p>
 <p>The segment is modified if it is the positive bit (1). Otherwise, the segment is not modified.</p>
-<p>Let us define bellow, with more details, our main objective.</p>
+<p>Let us define below the main parts of our project:</p>
 <section id="Objective">
 <h2>Objective<a class="headerlink" href="#Objective" title="Permalink to this heading">#</a></h2>
-<p>The purpose of the project is to use <code class="docutils literal notranslate"><span class="pre">Vision</span> <span class="pre">Transformer</span> <span class="pre">(ViT)</span></code> mixed with <code class="docutils literal notranslate"><span class="pre">Transfer</span> <span class="pre">Learning</span></code> to achieve a great accuracy and recall on the validation set. ViT is a new field which try to reproduce the same performance that the Convolution Neural Networks on image classification task but using the Transformer architecture. It can provide very accurate results.</p>
+<p>The project aims to use <code class="docutils literal notranslate"><span class="pre">Vision</span> <span class="pre">Transformer</span> <span class="pre">(ViT)</span></code> mixed with <code class="docutils literal notranslate"><span class="pre">Transfer</span> <span class="pre">Learning</span></code> to achieve great accuracy and recall on the validation set. ViT is a new field that tries to reproduce the same performance that the Convolution Neural Networks on image classification tasks but using the Transformer architecture. It can provide very accurate results.</p>
 <img alt="VISION_TRANSFORMER" src="https://www.researchgate.net/profile/Jacob-Heilmann-Clausen/publication/357885173/figure/fig1/AS:1113907477389319&#64;1642587646516/Vision-Transformer-architecture-main-blocks-First-image-is-split-into-fixed-size_W640.jpg" />
-<p>However, we cannot obtain such great result with only few images. ViT require around 14 millions images to learn on image classification task and we want to train the model only on one GPU device. Then the solution is to use Transfer Learning with a pre-trained Transformer to improve the overall performance.</p>
-<p>We will fine-tune the pre-trained ViT Model for which the ArXiv paper is available at the following link <a class="reference external" href="https://arxiv.org/pdf/2010.11929">Vision Transformer</a>. It was pre-trained on the ImageNet-21k which contains 14 millions of images distributed over 21 thousand classes. The model is available in HuggingFace and can be import with the HuggingFace API.</p>
+<p>However, we cannot obtain such great results with only a few images. ViT requires around 14 million images to learn image classification tasks, and we want to train the model only on one GPU device. Then the solution is to use Transfer Learning with a pre-trained Transformer to improve the overall performance.</p>
+<p>We will fine-tune the pre-trained ViT Model for which the ArXiv paper is available at the following link <a class="reference external" href="https://arxiv.org/pdf/2010.11929">Vision Transformer</a>. It was pre-trained on the ImageNet-21k, which contains 14 million images distributed over 21 thousand classes. The model is available in HuggingFace and can be imported with the HuggingFace API.</p>
 <p>For the moment, we want to obtain the following scores on the validation set:</p>
 <ul class="simple">
 <li><p><strong>Accuracy &gt; 80</strong></p></li>
 <li><p><strong>f1 &gt; 80</strong></p></li>
 </ul>
-<p>Since the predictions are not always damaging if they are False, we will not enforce the model to obtain more than 90% of <strong>Accuracy</strong> and <strong>f1-score</strong>.</p>
-<p>The next section describe the steps that are required to achieve the project.</p>
+<p>Since the predictions are only sometimes damaging if False, we will only force the model to obtain up to 90% of <strong>Accuracy</strong> and <strong>f1-score</strong>.</p>
+<p>The following section describes the steps that are required to achieve the project.</p>
 </section>
 <section id="Steps-🧾">
 <h2>Steps 🧾<a class="headerlink" href="#Steps-🧾" title="Permalink to this heading">#</a></h2>
-<p>Let us define below the main parts of our project:</p>
 <ul class="simple">
-<li><p>Data generation and exploration: We must recuperate the images, visualize them, and identify their statistics. Moreover, we will define the augmentation methods to add to the pictures ➡️ <a class="reference internal" href="generate_and_visualize.html"><span class="doc">Generating_and_visualizing</span></a></p></li>
-<li><p>Preprocessing method: We must, after exploration, define the preprocessing to add before training the model on them. ➡️ <a class="reference internal" href="preprocessing_and_loading.html"><span class="doc">Preprocessing_and_loading</span></a></p></li>
+<li><p>Data generation and Exploration: We must recuperate the images, visualize them, and identify their statistics. Moreover, we will define the augmentation methods to add to the pictures ➡️ <a class="reference internal" href="generate_and_visualize.html"><span class="doc">Generating_and_visualizing</span></a></p></li>
+<li><p>Preprocessing method: We must, after Exploration, define the preprocessing to add before training the model on them. ➡️ <a class="reference internal" href="preprocessing_and_loading.html"><span class="doc">Preprocessing_and_loading</span></a></p></li>
 <li><p>Split the images between train, validation, and test sets. ➡️ <a class="reference internal" href="split_dataset.html"><span class="doc">Data_splitting</span></a></p></li>
 <li><p>Load the ViT Model, explain the architecture briefly, and define the metrics to add. ➡️ <a class="reference internal" href="vit_model.html"><span class="doc">VitModel_Metrics</span></a></p></li>
-<li><p>Search for the best model with The Bayesian Optimization strategy. ➡️</p></li>
+<li><p>Search for the best model with The Bayesian Optimization strategy. ➡️ <a class="reference external" href="best_model_search.ipynb">Search_best_model</a></p></li>
 <li><p>Fine-tune the best model. 🛑</p></li>
 <li><p>Evaluate the model on the test set. ➡️</p></li>
 <li><p>Deploy the model to Hugging Face. ➡️ <a class="reference internal" href="deploy_to_hugging_face.html"><span class="doc">Deployment</span></a></p></li>

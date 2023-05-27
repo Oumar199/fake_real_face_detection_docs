@@ -160,7 +160,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
 <li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
 <li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Vision Transformer Model + Configuration and Metrics 👓</a></li>
@@ -640,7 +640,7 @@ correlation between the queries and the keys as follows:</p>
 <div class="math notranslate nohighlight">
 \[attention_2 = \frac{\exp(-attention_1)}{\sum_{s_2} \exp(-attention_1)}\]</div>
 </div>
-<p>The final attention, which defines the most critical pixels in an image, is calculated by multiplying the attention weights of an element by each of their corresponding part of the sequence, summing over the results of that multiplications and concatenating all the summations made (each provide a vector of dimension <span class="math notranslate nohighlight">\((s, d_v)\)</span> where <span class="math notranslate nohighlight">\(d_v = d_k = d_q\)</span> is the dimension of the values and is equal to that of the keys and queries):</p>
+<p>The final attention, which defines the most critical pixels in an image, is calculated by multiplying the attention weights of an element by each of their corresponding part of the sequence, summing over the results of that multiplications and concatenating all the summations made (each provides a vector of dimension <span class="math notranslate nohighlight">\((s, d_v)\)</span> where <span class="math notranslate nohighlight">\(d_v = d_k = d_q\)</span> is the dimension of the values and is equal to that of the keys and queries):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[attention_h = attention_2 \times v\]</div>

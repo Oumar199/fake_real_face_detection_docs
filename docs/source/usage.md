@@ -54,7 +54,7 @@ print(results.head(50))
 
 To execute the file, write the following command in the console of your terminal:
 ```console
-$ python<version> optimization
+$ python<version> optimization.py
 ```
 
 

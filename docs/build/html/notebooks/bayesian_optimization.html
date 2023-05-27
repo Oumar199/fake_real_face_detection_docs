@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Generation and Exploration of the images 🔎" href="generate_and_visualize.html" /><link rel="prev" title="Real and Fake Face Detection (RFFD)" href="context_of_the_project.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Generation and Exploration of the Images 🔎" href="generate_and_visualize.html" /><link rel="prev" title="Real and Fake Face Detection (RFFD)" href="context_of_the_project.html" />
 
     <!-- Generated with Sphinx 6.2.1 and Furo 2023.05.20 -->
         <title>Bayesian Optimization from Scratch 🔝 - Fake and Real Face Detection with ViT 0.0.1 documentation</title>
@@ -160,7 +160,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Bayesian Optimization from Scratch 🔝</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
 <li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
 <li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
@@ -559,28 +559,28 @@ Overwriting fake-face-detection/fake_face_detection/utils/sampling.py
 <p>The acquisition function will use the surrogate to examine which of many random samples is the best suited for the next generation:</p>
 <ol class="arabic">
 <li><p>First, we must generate random samples from the search spaces.</p></li>
-<li><p>Second, since we already have an approximation of the objective function’s distribution conditionally to input data via the surrogate function, we can estimate the vector means and their corresponding standard deviations:</p>
+<li><p>Second, since we already have an approximation of the objective function’s distribution conditionally to input data via the surrogate function, we can estimate the vector means and their corresponding covariance:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mu_e, \sigma_e \sim P(f/samples)\]</div>
+\[\mu_e, \sigma_e^2 \sim P(f/samples)\]</div>
 </div>
 </li>
-<li><p>Third, we must compare the values in the vector of the estimated means are compared to the best mean calculated as follows:</p>
+<li><p>Third, we must compare the values in the vector of the estimated means and the best mean obtained from the input data defined as follows:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\max(\mu), \space where \space \mu,. \sim P(f/input\_data)\]</div>
 </div>
 </li>
 </ol>
-<p>The probability of improvement is the cumulative normal distribution of the normalized distance between the estimated means and the best one (this distance represents the regret in RL). The probability of improvement is calculated as follows:</p>
+<p>The probability of improvement is the cumulative normal distribution of the normalized distance between the estimated means and the best one. The probability of improvement is calculated as follows:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[PI = P(f &lt; \frac{\mu_e - \mu_{best}}{\sigma_e + \epsilon})\]</div>
+\[PI = P(f &lt; \frac{\mu_e - \mu_{best}}{\sigma_e^2 + \epsilon})\]</div>
 </div>
-<p>Where <span class="math notranslate nohighlight">\(\epsilon\)</span> is added to avoid division by zero.</p>
-<p><strong>Remark</strong>: it exists different acquisition functions like the UCB function. But for the purpose of our project we will focus on the probability of improvement.</p>
-<p><strong>Note</strong>: In our example we want to minimize the loss so we must take <span class="math notranslate nohighlight">\(-\mu_e\)</span> and <span class="math notranslate nohighlight">\(-\mu\)</span> to find the best solution.</p>
-<p>Let us implement bellow the acquisition function.</p>
+<p>where <span class="math notranslate nohighlight">\(\epsilon\)</span> is a number added to the covariance to avoid division by zero.</p>
+<p><strong>Remark</strong>: it exists different acquisition functions like the UCB function. But for our project, we will focus on the probability of improvement.</p>
+<p><strong>Note</strong>: In our example, we want to minimize the loss so we must take <span class="math notranslate nohighlight">\(-\mu_e\)</span> and <span class="math notranslate nohighlight">\(-\mu\)</span> to find the best solution.</p>
+<p>Let us implement below the acquisition function.</p>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
 </pre></div>
@@ -751,7 +751,7 @@ Overwriting fake-face-detection/fake_face_detection/utils/generation.py
 2.981966343907849
 </pre></div></div>
 </div>
-<p>We don’t have enough data so we can obtain a worth loss. We must concatenate the generated samples and scores in order to obtain a more accurate prediction from the surrogate function.</p>
+<p>We need more data so we can obtain a worthwhile loss. We must concatenate the generated samples and scores to get a more accurate prediction from the surrogate function.</p>
 <div class="nbinput nblast docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[24]:
 </pre></div>
@@ -861,7 +861,7 @@ Overwriting fake-face-detection/fake_face_detection/optimization/bayesian_optimi
 </pre></div>
 </div>
 </div>
-<p>Let us make 50 trials in order to find the set of hyperparameters.</p>
+<p>Let us train and recuperate the samples obtained after 50 trials.</p>
 <div class="nbinput nblast docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[27]:
 </pre></div>
@@ -1322,7 +1322,7 @@ Overwriting fake-face-detection/fake_face_detection/optimization/bayesian_optimi
 </table>
 </div></div>
 </div>
-<p>The best loss and the corresponding hyperparameters are the followings:</p>
+<p>Let us print the best loss and the corresponding hyperparameters.</p>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[29]:
 </pre></div>
@@ -1374,7 +1374,7 @@ Overwriting fake-face-detection/fake_face_detection/optimization/bayesian_optimi
 </table>
 </div></div>
 </div>
-<p>Let us get the loss obtained with best set of hyperparameters without adding a large noise.</p>
+<p>Let us get the loss with the best parameters without adding significant noise.</p>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[30]:
 </pre></div>
@@ -1400,7 +1400,7 @@ Overwriting fake-face-detection/fake_face_detection/optimization/bayesian_optimi
 0.06265220941131512
 </pre></div></div>
 </div>
-<p>The final loss is equal to <code class="docutils literal notranslate"><span class="pre">0.063</span></code>. The first loss was equal to <code class="docutils literal notranslate"><span class="pre">6.40</span></code>. We highly progressed since the first random sample ✌️.</p>
+<p>We highly progressed since the first random sample ✌️.</p>
 </section>
 </section>
 
@@ -1414,7 +1414,7 @@ Overwriting fake-face-detection/fake_face_detection/optimization/bayesian_optimi
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Generation and Exploration of the images 🔎</div>
+                <div class="title">Generation and Exploration of the Images 🔎</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

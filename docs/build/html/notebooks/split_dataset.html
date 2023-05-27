@@ -160,7 +160,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
 <li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Split data 🫧</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
@@ -203,7 +203,7 @@
 <h1>Split data 🫧<a class="headerlink" href="#Split-data-🫧" title="Permalink to this heading">#</a></h1>
 <p>This notebook will split the dataset between training, validation, and test sets. It is part of the model selection. The training set will be used to train the model and must be at least <span class="math notranslate nohighlight">\(50\%\)</span> of the whole dataset to make the model distinguish between an actual image and a photoshopped one. The number of training images must tend to infinity to find the correct pattern or model that most fits the pictures and is not over-fit. The validation set is used to select the best model or location
 of hyperparameters and evaluate the model during the training. The test only verifies if the model is generalized on non-seen images. We will use stratified random sampling to obtain the proportion of labels in each set. We randomly sample by stratum, where each group of images shares the same title.</p>
-<p>Since we have only <span class="math notranslate nohighlight">\(2041\)</span> images and it is a small size, we decided to take <span class="math notranslate nohighlight">\(80\%\)</span> of the dataset to train the model, <span class="math notranslate nohighlight">\(10\%\)</span> to validate it, and <span class="math notranslate nohighlight">\(10\%\)</span> to test. We will take the exact proportions that indicated in the first pie chart of the following image:</p>
+<p>Since we have only <span class="math notranslate nohighlight">\(2041\)</span> images and small size, we decided to take <span class="math notranslate nohighlight">\(80\%\)</span> of the dataset to train the model, <span class="math notranslate nohighlight">\(10\%\)</span> to validate it, and <span class="math notranslate nohighlight">\(10\%\)</span> to test. We will take the exact proportions indicated in the first pie chart of the following image:</p>
 <img alt="train_test_split" src="https://assets-global.website-files.com/5d7b77b063a9066d83e1209c/613ec5b6c3da5313e1abcc47_UeKfm9v6E9QobwFfG3ud_20Q82QoqI8W6kXQnDm_QBnOVyQXCNmwjWtMI5vD9du4cjovnpzSYBbIDHdSU-57H1Bb4DfuUCaSjZjozKIwD0IQsH7FyMuFTW7aYVW-zelk2RNMAez3%3Ds0.png" />
 <p>The above image was got from <a class="reference external" href="https://www.v7labs.com/blog/train-validation-test-set">7lab</a>.</p>
 <p>Let us create a function that splits the dataset and creates new directories for them.</p>

@@ -21,7 +21,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": 21,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -74,7 +74,7 @@
    "source": [
     "Like we did to calculate the means and variance of the images, we can at first **divide the images' arrays by 255** to process float values. Doing so also made the means and the variances scaled between 0 and 1. Dividing the images by the maximum pixel prevents the model from exploding gradient while being trained. The gradient exploding make the weights tend to infinity and not to converge anymore because, with the stochastic gradient descent, we have the following computation, which is made at each new update of the weights: $w = w - \\delta_w \\times \\alpha$, where $w$ represent a weight matrix, $\\delta_w$ is the derivation of the loss compared with the weight matrix and $\\alpha$ is the step size. If $\\delta_w \\sim \\infty$ then $w$ also tends to $\\infty$. \n",
     "\n",
-    "![exploding_gradient](20170511075921850.png)\n",
+    "![exploding_gradient](sdsaldjksld.png)\n",
     "\n",
     "The second normalization we can do is for the transfer learning task and imply normalizing the image by the same mean and standard deviation as the transferred model was pre-trained on. It will add stability to the fine-tuning because the pictures will have the same distribution as the base images and then totally simplify the adaptation of the model to the new photos. The following illustration may make you better understand.\n",
     "\n",
@@ -115,7 +115,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 2,
+   "execution_count": 22,
    "metadata": {},
    "outputs": [
     {
@@ -125,7 +125,7 @@
        "<PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=600x600>"
       ]
      },
-     "execution_count": 2,
+     "execution_count": 22,
      "metadata": {},
      "output_type": "execute_result"
     }
@@ -148,7 +148,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 3,
+   "execution_count": 23,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -165,7 +165,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 4,
+   "execution_count": 24,
    "metadata": {},
    "outputs": [
     {
@@ -192,14 +192,14 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "Then each patch must have a **(37, 37)**size. To recuperate the patches with the precise size, we must define **16 boxes with their coordinates** according to the height's axis and the width's axis of the image. The position of a box is defined by taking the coordinate of the top left of the box and that of the bottom right of the box. The first box will have coordinates of -> **(top_left = (0, 0), bottom_right = (37, 37))**. We only need to identify the first coordinate and add the patch size to find the second coordinate. For the next boxes, we must modify the top_left by adding patch size at each time to one of the height's axes (the first number of the coordinate) and width axes (the second number of the coordinate) of a current box 'a number of divisions' times. We identify the second coordinate each time to trace the whole box. Let us trace the first (in <i style = \"color: red\">red</i>) and the second (in <i style = \"color: cyan\">cyan</i>) coordinates of the boxes inside a figure. \n",
+    "Then each patch must have a **(37, 37)** size. To recuperate the patches with the precise size, we must define **16 boxes with their coordinates** according to the height's axis and the width's axis of the image. The position of a box is defined by taking the coordinate of the top left of the box and that of the bottom right of the box. The first box will have coordinates of -> **(top_left = (0, 0), bottom_right = (37, 37))**. We only need to identify the first coordinate and add the patch size to find the second coordinate. For the next boxes, we must modify the top_left by adding patch size at each time to one of the height's axes (the first number of the coordinate) and width axes (the second number of the coordinate) of a current box 'a number of divisions' times. We identify the second coordinate each time to trace the whole box. Let us trace the first (in <i style = \"color: red\">red</i>) and the second (in <i style = \"color: cyan\">cyan</i>) coordinates of the boxes inside a figure. \n",
     "\n",
     "**Note**: The `product` creates a tuple for each possible coordinate between position on the height's axis going from 0 to $patch\\_h \\times n\\_patch$ by step of $patch\\_h$ and position on width's axis going from 0 to $path\\_w \\times n\\_patch$ by step of $patch\\_w$."
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 25,
    "metadata": {},
    "outputs": [
     {
@@ -273,7 +273,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 26,
    "metadata": {},
    "outputs": [
     {
@@ -333,7 +333,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 7,
+   "execution_count": 27,
    "metadata": {},
    "outputs": [
     {
@@ -360,7 +360,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 8,
+   "execution_count": 28,
    "metadata": {},
    "outputs": [
     {
@@ -430,7 +430,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 9,
+   "execution_count": 29,
    "metadata": {},
    "outputs": [
     {
@@ -440,7 +440,7 @@
        "<PIL.Image.Image image mode=RGB size=672x672>"
       ]
      },
-     "execution_count": 9,
+     "execution_count": 29,
      "metadata": {},
      "output_type": "execute_result"
     }
@@ -466,7 +466,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 10,
+   "execution_count": 30,
    "metadata": {},
    "outputs": [
     {
@@ -537,7 +537,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 11,
+   "execution_count": 31,
    "metadata": {},
    "outputs": [
     {
@@ -556,7 +556,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 12,
+   "execution_count": 32,
    "metadata": {},
    "outputs": [
     {
@@ -566,7 +566,7 @@
        "<PIL.Image.Image image mode=RGB size=224x224>"
       ]
      },
-     "execution_count": 12,
+     "execution_count": 32,
      "metadata": {},
      "output_type": "execute_result"
     }
@@ -623,7 +623,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 13,
+   "execution_count": 33,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -632,14 +632,14 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 14,
+   "execution_count": 34,
    "metadata": {},
    "outputs": [
     {
      "name": "stdout",
      "output_type": "stream",
      "text": [
-      "<PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=600x600 at 0x200C58E4310>\n"
+      "<PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=600x600 at 0x225420D4E80>\n"
      ]
     }
    ],
@@ -651,7 +651,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 15,
+   "execution_count": 35,
    "metadata": {},
    "outputs": [
     {
@@ -738,7 +738,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 16,
+   "execution_count": 36,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -756,7 +756,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 17,
+   "execution_count": 37,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -780,7 +780,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 18,
+   "execution_count": 38,
    "metadata": {},
    "outputs": [
     {
@@ -810,7 +810,7 @@
        "}"
       ]
      },
-     "execution_count": 18,
+     "execution_count": 38,
      "metadata": {},
      "output_type": "execute_result"
     }
@@ -833,7 +833,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 19,
+   "execution_count": 39,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -855,7 +855,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 20,
+   "execution_count": 40,
    "metadata": {},
    "outputs": [
     {
@@ -863,7 +863,7 @@
      "output_type": "stream",
      "text": [
       "Images' tensor shape: torch.Size([10, 3, 224, 224])\n",
-      "Labels: tensor([0, 0, 1, 0, 1, 1, 0, 1, 1, 0])\n"
+      "Labels: tensor([0, 0, 0, 0, 1, 1, 1, 1, 1, 1])\n"
      ]
     }
    ],
