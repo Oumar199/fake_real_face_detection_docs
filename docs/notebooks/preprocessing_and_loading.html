@@ -65,6 +65,11 @@
 <li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
 <li class="toctree-l1"><a class="reference internal" href="deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.html">fake_face_detection package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.data.html">fake_face_detection.data package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.metrics.html">fake_face_detection.metrics package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.optimization.html">fake_face_detection.optimization package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.trainers.html">fake_face_detection.trainers package</a></li>
 </ul>
 
         </div>
@@ -93,7 +98,7 @@
              
   <section id="Preprocessing-and-loading-⚗️">
 <h1>Preprocessing and loading ⚗️<a class="headerlink" href="#Preprocessing-and-loading-⚗️" title="Permalink to this heading"></a></h1>
-<p>In this notebook, we will define the custom dataset, the data locator that will use the ViT Model trainer to load the data, and the main preprocessing to make. Notice that the calculation of the loss is inputted in this notebook.</p>
+<p>In this notebook, we will define the custom dataset, the data collator that will use the ViT Model trainer to load the data, and the main preprocessing to make. Notice that the calculation of the loss is inputted in this notebook.</p>
 <p>We will need some libraries.</p>
 <div class="nbinput nblast docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
@@ -485,39 +490,13 @@ Height and width of each box: (3, 3)
 </section>
 <section id="Custom-dataset">
 <h2>Custom dataset<a class="headerlink" href="#Custom-dataset" title="Permalink to this heading"></a></h2>
-<p>The custom dataset will recuperate as arguments the path of the images, the label weights, and a transformer. It has the following signature:</p>
+<p>The custom dataset will recuperate as arguments the path of the images, the id maps, and a transformer. It has the following signature:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FakeFaceDetectionDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">transformer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fake_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">real_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">transformer</span><span class="p">,</span> <span class="o">**</span><span class="n">transformer_kwargs</span><span class="p">):</span>
 
         <span class="k">pass</span>
 </pre></div>
-</div>
-<div class="nbinput nblast docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[33]:
-</pre></div>
-</div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
-</pre></div>
-</div>
-</div>
-<div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[34]:
-</pre></div>
-</div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;data/real_and_fake_face/training_fake/easy_100_1111.jpg&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">img</span><span class="p">:</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
-<div class="nboutput nblast docutils container">
-<div class="prompt empty docutils container">
-</div>
-<div class="output_area docutils container">
-<div class="highlight"><pre>
-&lt;PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=600x600 at 0x225420D4E80&gt;
-</pre></div></div>
 </div>
 <div class="nbinput docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[35]:
