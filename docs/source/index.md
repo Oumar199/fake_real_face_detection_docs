@@ -23,13 +23,9 @@ notebooks/generate_and_visualize
 notebooks/preprocessing_and_loading
 notebooks/split_dataset
 notebooks/vit_model
+notebooks/best_model_search
+notebooks/predictions
 notebooks/deploy_to_hugging_face
-
-<!-- package/fake_face_detection
-package/fake_face_detection.data
-package/fake_face_detection.metrics
-package/fake_face_detection.optimization
-package/fake_face_detection.trainers -->
 
 ```
 

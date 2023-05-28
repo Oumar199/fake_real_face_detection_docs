@@ -1,0 +1,5140 @@
+{
+ "cells": [
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "\n",
+    "Search the best model ⚙️\n",
+    "----------------------------\n",
+    "\n",
+    "This notebook will use the simple Bayesian Optimization algorithm implemented in [bayesian_optimization](bayesian_optimization.ipynb). To achieve this, we must define the primary hyperparameters and their corresponding search spaces. We must also define functions to help us search for the best combination of hyperparameters and display the results as a parallel coordinate chart in the tensorboard.\n",
+    "\n",
+    "\n",
+    "Let us begin with the definition of the hyperparameters to tune."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# import some libraries\n",
+    "import warnings\n",
+    "warnings.filterwarnings('ignore')\n",
+    "\n",
+    "from fake_face_detection.optimization.fake_face_bayesian_optimization import SimpleBayesianOptimizationForFakeReal\n",
+    "from fake_face_detection.data.fake_face_dataset import FakeFaceDetectionDataset\n",
+    "from fake_face_detection.trainers.custom_trainer import get_custom_trainer\n",
+    "from transformers import ViTForImageClassification, ViTFeatureExtractor, Trainer\n",
+    "from torchvision.transforms import Compose, transforms\n",
+    "from torch.utils.data import DataLoader\n",
+    "import pytorch_lightning as pl\n",
+    "from functools import partial\n",
+    "import pickle\n",
+    "import torch\n",
+    "import os\n",
+    "\n",
+    "# pl.seed_everything(0)\n",
+    "\n",
+    "# disable wandb\n",
+    "os.environ[\"WANDB_DISABLED\"] = \"true\""
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Hyperparameters"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The following hyperparameters will be necessary to train the model:\n",
+    "\n",
+    "- The batch size $ \\in \\{8, 16\\}$ $\\rightarrow$ the train batch size corresponds to the number of images the model trains on at each sub-iteration of a training epoch. \n",
+    "- The learning rate ($lr$) $ \\in [1e-5, 1e-3]$ $\\rightarrow$ The learning rate or initial learning rate defines the amount of the gradients that will be used to update the weights. It is sent as an argument to the optimizer.\n",
+    "- The weight decay $ = 0$ $\\rightarrow$ corresponds to a floating number that will be multiplied with the norm of the weights to diminish their effects or regularize them during the training. We didn't fix a weight since it doesn't provide us a great result at the first training but we kept the explanation on the weight decay usage.\n",
+    "\n",
+    "\n",
+    "The optimizer to use is the `AdamW` optimizer. It provides a smoother updating so that the weights do not diverge (stability of the training), and a weight decay is provided to regularize the training and not over-fit. `AdamW` was introduced in *Decoupled Weight Decay Regularization* (see [AdamW](https://arxiv.org/pdf/1711.05101)) by Ilya Loshchilov and Frank Hutter. It is an update to the original `Adam` optimizer, and the algorithm is defined as follows (pseudo-code with Python):\n",
+    "\n",
+    "----------------\n",
+    "```python\n",
+    "def adamW(lr: float, betas: tuple (beta_1, beta_2), parameters: [matrix], loss: [function], epsilon: float, weight_decay: float, amsgrad: bool):\n",
+    "\n",
+    "    \"\"\" Updating the parameters\n",
+    "\n",
+    "    Args:\n",
+    "        lr (float): The learning rate\n",
+    "        betas (tuple): The step size of the momentums\n",
+    "        parameters ([matrix]): The weights or group of importance inside the model that we want to update\n",
+    "        loss ([function]): The loss function or objective\n",
+    "        epsilon (float): A number to add to the square root of the second momentum to avoid division with zero\n",
+    "        weight_decay (float): A float multiplied with the parameters to regularize it\n",
+    "        amsgrad (bool): Indicate if we want to normalize the first momentum using the maximum of the second momentum or not\n",
+    "    \n",
+    "    Returns:\n",
+    "        [matrix]: The updated parameters\n",
+    "    \"\"\"\n",
+    "            \n",
+    "    # recuperate the betas\n",
+    "    beta_1, beta_2 = betas\n",
+    "\n",
+    "    # initialize the first, second moments, and maximum second momentum\n",
+    "    m = v = v_max = 0\n",
+    "\n",
+    "    # determine the gradient of the objective compared to the parameters or weights\n",
+    "    delta = grad(loss) / grad(parameters)\n",
+    "\n",
+    "    # decay the weights by multiplying with the learning rate, and the weight decay\n",
+    "    parameters = parameters - wd*lr*parameters\n",
+    "\n",
+    "    # update the first momentum\n",
+    "    m = beta_1*m + (1 - beta_1)*delta\n",
+    "\n",
+    "    # update the second momentum\n",
+    "    v = beta_2*v + (1 - beta_2)*delta**2\n",
+    "\n",
+    "    #  get the normalized first momentum\n",
+    "    m_ = m/(1 - beta_1)\n",
+    "\n",
+    "    # get the normalized second momentum\n",
+    "    v_ = v/(1 - beta_2)\n",
+    "\n",
+    "    if amsgrad: # if amsgrad is set to True\n",
+    "        \n",
+    "        # take the maximum between the normalized and the last maximum second momentum\n",
+    "        v_max = max(v_max, v_)\n",
+    "\n",
+    "        # update the weights with the maximum second momentum\n",
+    "        parameters = parameters - lr*m_ / (sqrt(v_max) + epsilon)\n",
+    "    \n",
+    "    else: # if amsgrad is set to False\n",
+    "\n",
+    "        # update the parameters with the normalized second momentum\n",
+    "        parameters = parameters - lr*m_ / (sqrt(v_) + epsilon)\n",
+    "    \n",
+    "    return parameters\n",
+    "\n",
+    "```\n",
+    "------------------\n",
+    "\n",
+    "Another thing to define is the learning rate scheduler. His role is to linearly augment the learning rate proportionally to several steps named the warmup steps and beginning to linearly decay after the warmup steps until reaching zero at the end of the training. A step increase at each time we update the parameters. That is the following pseudo-code (see the actual code [true_code](https://github.com/huggingface/transformers/blob/v4.29.1/src/transformers/optimization.py#L100)):\n",
+    "\n",
+    "------------------\n",
+    "```python\n",
+    "def linear_learning_rate_scheduling_with_warmup(initial_lr: float, current_step: int, warmup_steps: int, max_training_step: int):\n",
+    "    \"\"\" Linearly decay the learning after a warmup steps\n",
+    "\n",
+    "    Args:\n",
+    "        initial_lr (float): The initial learning rate of a specific group of weights\n",
+    "        current_step (int): The current step of the training\n",
+    "        warmup_steps (int): The number os steps before beginning to decay the learning rate\n",
+    "        max_training_step (int): The maximum number of training steps\n",
+    "    \"\"\"\n",
+    "\n",
+    "    if current_step < warmup_step: # if the warmup_steps is not yet reached \n",
+    "\n",
+    "        # We take a part of the initial learning proportional to the number of steps already reached before the warmup steps\n",
+    "        return initial_lr*float(current_step) / float(warmup_step)\n",
+    "    \n",
+    "    else: # if the warmup step is already reached\n",
+    "\n",
+    "        # We take a part of the initial learning proportional to the number of steps that it remains to travel since the warmup steps\n",
+    "        return initial_lr*float(max_training_steps - current_step) / float(max_training_steps - warmup_step)\n",
+    "\n",
+    "```\n",
+    "--------------"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "\n",
+    "Let us initialize below the search spaces according to that defined in [bayesian_optimization](bayesian_optimization.ipynb):"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "search_spaces = {\n",
+    "    'lr': {\n",
+    "        'min': 1e-5,\n",
+    "        'max': 1e-4 # lower is better\n",
+    "    },\n",
+    "    'batch_size': {\n",
+    "        'value': 16\n",
+    "    },\n",
+    "    'h_flip_p': {\n",
+    "        'min': 0.0,\n",
+    "        'max': 0.5\n",
+    "    },\n",
+    "    'v_flip_p': {\n",
+    "        'min': 0.0,\n",
+    "        'max': 0.5\n",
+    "    },\n",
+    "    'gray_scale_p': {\n",
+    "        'min': 0.0,\n",
+    "        'max': 0.5\n",
+    "    },\n",
+    "    'rotation': {\n",
+    "        'values': [1, 0]\n",
+    "    }\n",
+    "}"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "In the next section, we will search for the best model using randomly generated samples from the search spaces."
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Search for the best model"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "In this section, we must load the ViT Model and the custom hugging face trainer we configured in [preprocessing_and_loading](preprocessing_and_loading.ipynb). Let us recuperate the two."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# recuperate the labels weights\n",
+    "with open('data/extractions/weights.txt', 'rb') as f:\n",
+    "    \n",
+    "    depick = pickle.Unpickler(f)\n",
+    "    \n",
+    "    weights = depick.load()\n",
+    "    \n",
+    "# recuperate the image characteristics\n",
+    "with open('data/extractions/fake_real_dict.txt', 'rb') as f:\n",
+    "    \n",
+    "    depick = pickle.Unpickler(f)\n",
+    "    \n",
+    "    characs = depick.load()\n",
+    "\n",
+    "# define the model name\n",
+    "model_name = 'google/vit-base-patch16-224-in21k'\n",
+    "\n",
+    "# initialize the model without calling it\n",
+    "model = partial(\n",
+    "    ViTForImageClassification.from_pretrained,\n",
+    "    model_name, \n",
+    "    num_labels = len(characs['ids']),\n",
+    "    id2label = {name: key for key, name in characs['ids'].items()},\n",
+    "    label2id = characs['ids']\n",
+    "    )\n",
+    "\n",
+    "# recuperate the trainer class\n",
+    "Trainer = get_custom_trainer(weights)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We must also define the training and validation datasets with the ViT Model's feature extractor as their Transformer. Only the training set requires an augmentation strategy. So we will make them inside a function."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# initialize the feature extractor\n",
+    "feature_extractor = ViTFeatureExtractor(model_name)\n",
+    "\n",
+    "def get_datasets(h_flip_p: float, v_flip_p: float, gray_scale_p: float, rotation: bool):\n",
+    "\n",
+    "    # define a empty function\n",
+    "    empty = lambda x: x\n",
+    "    \n",
+    "    # initialize the training transformer\n",
+    "    training_transformer = Compose([\n",
+    "        transforms.RandomHorizontalFlip(h_flip_p),\n",
+    "        transforms.RandomVerticalFlip(v_flip_p),\n",
+    "        transforms.RandomGrayscale(gray_scale_p),\n",
+    "        transforms.RandomRotation(degrees=(0, 90)) if rotation else empty,\n",
+    "        partial(feature_extractor, return_tensors = 'pt')\n",
+    "    ])\n",
+    "    \n",
+    "    # define the path\n",
+    "    path = 'data/real_and_fake_splits'\n",
+    "    \n",
+    "    # recuperate the training dataset\n",
+    "    train_dataset = FakeFaceDetectionDataset(f\"{path}/train/training_fake\",\n",
+    "                                             f\"{path}/train/training_real\",\n",
+    "                                             characs['ids'],\n",
+    "                                             training_transformer)\n",
+    "    \n",
+    "    # recuperate the validation dataset\n",
+    "    valid_dataset = FakeFaceDetectionDataset(f\"{path}/valid/training_fake\",\n",
+    "                                             f\"{path}/valid/training_real\",\n",
+    "                                             characs['ids'],\n",
+    "                                             feature_extractor, transformer_kwargs = {'return_tensors': 'pt'})\n",
+    "    \n",
+    "    return train_dataset, valid_dataset"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us now create the training function below. We will use the `compute_metrics` function that we created in [vit_model](vit_model.ipynb) for the prediction to calculate the metrics and the `data_collator` that we created in [preprocessing_and_loading](preprocessing_and_loading.ipynb) to make the model load the images."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Overwriting fake-face-detection/fake_face_detection/trainers/search_train.py\n"
+     ]
+    }
+   ],
+   "source": [
+    "%%writefile fake-face-detection/fake_face_detection/trainers/search_train.py\n",
+    "\n",
+    "from fake_face_detection.metrics.compute_metrics import compute_metrics\n",
+    "from fake_face_detection.data.collator import fake_face_collator\n",
+    "from transformers import Trainer, TrainingArguments, set_seed\n",
+    "from torch.utils.tensorboard import SummaryWriter\n",
+    "from torch import nn\n",
+    "from typing import *\n",
+    "import numpy as np\n",
+    "import json\n",
+    "import os\n",
+    "\n",
+    "def train(epochs: int, output_dir: str, config: dict, model: nn.Module, trainer, get_datasets: Callable, log_dir: str = \"fake_face_logs\", metric = 'accuracy', seed: int = 0):\n",
+    "    \n",
+    "    print(\"------------------------- Beginning of training\")\n",
+    "    \n",
+    "    set_seed(seed)\n",
+    "    \n",
+    "    # initialize the model\n",
+    "    model = model()\n",
+    "    \n",
+    "    # reformat the config integer type\n",
+    "    for key, value in config.items():\n",
+    "        \n",
+    "        if isinstance(value, np.int32): config[key] = int(value)\n",
+    "    \n",
+    "    pretty = json.dumps(config, indent = 4)\n",
+    "    \n",
+    "    print(f\"Current Config: \\n {pretty}\")\n",
+    "    \n",
+    "    print(f\"Checkpoints in {output_dir}\")\n",
+    "    \n",
+    "    # recuperate the dataset\n",
+    "    train_dataset, test_dataset = get_datasets(config['h_flip_p'], config['v_flip_p'], config['gray_scale_p'], config['rotation'])\n",
+    "    \n",
+    "    # initialize the arguments of the training\n",
+    "    training_args = TrainingArguments(output_dir,\n",
+    "                                      per_device_train_batch_size=config['batch_size'],\n",
+    "                                      evaluation_strategy='epoch',\n",
+    "                                      save_strategy='epoch',\n",
+    "                                      logging_strategy='epoch',\n",
+    "                                      num_train_epochs=epochs,\n",
+    "                                      fp16=True,\n",
+    "                                      save_total_limit=2,\n",
+    "                                      push_to_hub=False,\n",
+    "                                      logging_dir=os.path.join(log_dir, os.path.basename(output_dir)),\n",
+    "                                      load_best_model_at_end=True,\n",
+    "                                      learning_rate=config['lr']\n",
+    "                                      )\n",
+    "    \n",
+    "    # train the model\n",
+    "    trainer_ = trainer(\n",
+    "        model = model,\n",
+    "        args = training_args,\n",
+    "        data_collator = fake_face_collator,\n",
+    "        compute_metrics = compute_metrics,\n",
+    "        train_dataset = train_dataset,\n",
+    "        eval_dataset = test_dataset\n",
+    "    )\n",
+    "    \n",
+    "    # train the model\n",
+    "    trainer_.train()\n",
+    "    \n",
+    "    # evaluate the model and recuperate metrics\n",
+    "    metrics = trainer_.evaluate(test_dataset)\n",
+    "    \n",
+    "    # add metrics and config to the hyperparameter panel of tensorboard\n",
+    "    with SummaryWriter(os.path.join(log_dir, 'hparams')) as logger:\n",
+    "        \n",
+    "        logger.add_hparams(\n",
+    "            config, metrics\n",
+    "        )\n",
+    "    \n",
+    "    print(metrics)\n",
+    "    \n",
+    "    print(\"------------------------- End of training\")\n",
+    "    # recuperate the metric to evaluate\n",
+    "    return metrics[f'eval_{metric}']\n",
+    "        "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%run fake-face-detection/fake_face_detection/trainers/search_train.py"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We implemented a new Bayesian optimization function based on our original one ([bayesian_optimization](bayesian_optimization.ipynb)), and that can find the code here [bayesian_optimization_for_fake_face_pred](fake_face_bayesian_optimization.py). It will make many evaluation steps to find the combination of hyperparameters providing us with the best model. Notice that each trial will provide a model that must be locally saved. The number of epochs can be fixed to `4` and the number of attempts to `20`. Moreover, the scale size will be taken as default `0.1`. \n",
+    "\n",
+    "The `f1` will be chosen as our principal metric."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 9.689183977257256e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.24296384828140632,\n",
+      "    \"v_flip_p\": 0.4591171658925659,\n",
+      "    \"gray_scale_p\": 0.4149264518294957,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_2yW4Acq\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n",
+      " 25%|██▌       | 110/440 [01:53<05:13,  1.05it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6821, 'learning_rate': 7.266887982942942e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 25%|██▌       | 110/440 [02:00<05:13,  1.05it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6410195827484131, 'eval_accuracy': 0.654054054054054, 'eval_f1': 0.6404494382022472, 'eval_runtime': 6.895, 'eval_samples_per_second': 26.831, 'eval_steps_per_second': 3.481, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:34<04:00,  1.10s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6174, 'learning_rate': 4.844591988628628e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 50%|█████     | 220/440 [04:43<04:00,  1.10s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5273972153663635, 'eval_accuracy': 0.7351351351351352, 'eval_f1': 0.7537688442211056, 'eval_runtime': 8.5588, 'eval_samples_per_second': 21.615, 'eval_steps_per_second': 2.804, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [07:08<01:48,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5266, 'learning_rate': 2.422295994314314e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 75%|███████▌  | 330/440 [07:15<01:48,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5722827911376953, 'eval_accuracy': 0.7081081081081081, 'eval_f1': 0.6625, 'eval_runtime': 6.9199, 'eval_samples_per_second': 26.734, 'eval_steps_per_second': 3.468, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:41<00:00,  1.74s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4339, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      "100%|██████████| 440/440 [09:51<00:00,  1.74s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4269016683101654, 'eval_accuracy': 0.8054054054054054, 'eval_f1': 0.8105263157894738, 'eval_runtime': 10.0503, 'eval_samples_per_second': 18.407, 'eval_steps_per_second': 2.388, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [10:04<00:00,  1.37s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 605.1563, 'train_samples_per_second': 11.587, 'train_steps_per_second': 0.727, 'train_loss': 0.5650030482899059, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.80it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4269016683101654, 'eval_accuracy': 0.8054054054054054, 'eval_f1': 0.8105263157894738, 'eval_runtime': 6.9234, 'eval_samples_per_second': 26.721, 'eval_steps_per_second': 3.467, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us make 20 trials."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_JulUpak'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 1.6528880304384158e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.22914276130929306,\n",
+      "    \"v_flip_p\": 0.4992272204272212,\n",
+      "    \"gray_scale_p\": 0.4980482239275472,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_JulUpak\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:06<05:37,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6833, 'learning_rate': 1.2396660228288119e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 25%|██▌       | 110/440 [02:14<05:37,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6644940376281738, 'eval_accuracy': 0.6486486486486487, 'eval_f1': 0.6766169154228856, 'eval_runtime': 8.0831, 'eval_samples_per_second': 22.887, 'eval_steps_per_second': 2.969, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:22<03:34,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6255, 'learning_rate': 8.264440152192079e-06, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:29<03:34,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.613722026348114, 'eval_accuracy': 0.7135135135135136, 'eval_f1': 0.7644444444444445, 'eval_runtime': 6.967, 'eval_samples_per_second': 26.554, 'eval_steps_per_second': 3.445, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:54<01:52,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5703, 'learning_rate': 4.1697857131514576e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:02<01:52,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.562276303768158, 'eval_accuracy': 0.7567567567567568, 'eval_f1': 0.7738693467336683, 'eval_runtime': 8.1622, 'eval_samples_per_second': 22.665, 'eval_steps_per_second': 2.94, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:32<00:00,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5349, 'learning_rate': 3.756563705541854e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      "100%|██████████| 440/440 [09:38<00:00,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5485998392105103, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.7708333333333333, 'eval_runtime': 6.5352, 'eval_samples_per_second': 28.308, 'eval_steps_per_second': 3.672, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:50<00:00,  1.34s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 590.5965, 'train_samples_per_second': 11.873, 'train_steps_per_second': 0.745, 'train_loss': 0.6034778334877707, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:08<00:00,  2.96it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5485998392105103, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.7708333333333333, 'eval_runtime': 7.9004, 'eval_samples_per_second': 23.417, 'eval_steps_per_second': 3.038, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_MmLN65b'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 7.862597200676361e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.26968951505981287,\n",
+      "    \"v_flip_p\": 0.3893132393152791,\n",
+      "    \"gray_scale_p\": 0.26517683609758874,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_MmLN65b\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:00<05:28,  1.00it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6659, 'learning_rate': 5.8969479005072705e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:07<05:28,  1.00it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6332506537437439, 'eval_accuracy': 0.6756756756756757, 'eval_f1': 0.7457627118644068, 'eval_runtime': 6.3941, 'eval_samples_per_second': 28.933, 'eval_steps_per_second': 3.753, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:13<03:48,  1.04s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5681, 'learning_rate': 3.9312986003381806e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:21<03:48,  1.04s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4887477457523346, 'eval_accuracy': 0.7783783783783784, 'eval_f1': 0.8056872037914692, 'eval_runtime': 8.1547, 'eval_samples_per_second': 22.686, 'eval_steps_per_second': 2.943, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:35<01:48,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4533, 'learning_rate': 1.9656493001690903e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [06:42<01:48,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.48847970366477966, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.7956989247311828, 'eval_runtime': 6.8166, 'eval_samples_per_second': 27.14, 'eval_steps_per_second': 3.521, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:57<00:00,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.371, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:06<00:00,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4256192445755005, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.806122448979592, 'eval_runtime': 8.5378, 'eval_samples_per_second': 21.668, 'eval_steps_per_second': 2.811, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:20<00:00,  1.27s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 560.6743, 'train_samples_per_second': 12.506, 'train_steps_per_second': 0.785, 'train_loss': 0.5145724036476829, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.51it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4256192445755005, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.806122448979592, 'eval_runtime': 7.2337, 'eval_samples_per_second': 25.575, 'eval_steps_per_second': 3.318, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 2\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_Md7dObb'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 8.066164211147095e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.14262461447346014,\n",
+      "    \"v_flip_p\": 0.34829575180008127,\n",
+      "    \"gray_scale_p\": 0.365252658707733,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_Md7dObb\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:06<05:37,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6865, 'learning_rate': 6.049623158360321e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 25%|██▌       | 110/440 [02:14<05:37,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6505582332611084, 'eval_accuracy': 0.6324324324324324, 'eval_f1': 0.6458333333333333, 'eval_runtime': 7.8127, 'eval_samples_per_second': 23.679, 'eval_steps_per_second': 3.072, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:58<02:55,  1.25it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6299, 'learning_rate': 4.0330821055735474e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 50%|█████     | 220/440 [04:04<02:55,  1.25it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5699502229690552, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7753303964757708, 'eval_runtime': 5.8556, 'eval_samples_per_second': 31.594, 'eval_steps_per_second': 4.099, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:26<02:09,  1.18s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5014, 'learning_rate': 2.0165410527867737e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 75%|███████▌  | 330/440 [06:34<02:09,  1.18s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.584014892578125, 'eval_accuracy': 0.7351351351351352, 'eval_f1': 0.7262569832402235, 'eval_runtime': 8.1066, 'eval_samples_per_second': 22.821, 'eval_steps_per_second': 2.961, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:19<00:00,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4147, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      "100%|██████████| 440/440 [08:26<00:00,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4597586989402771, 'eval_accuracy': 0.8, 'eval_f1': 0.8229665071770335, 'eval_runtime': 6.4915, 'eval_samples_per_second': 28.499, 'eval_steps_per_second': 3.697, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:36<00:00,  1.17s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 516.6343, 'train_samples_per_second': 13.572, 'train_steps_per_second': 0.852, 'train_loss': 0.5581029718572443, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.77it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4597586989402771, 'eval_accuracy': 0.8, 'eval_f1': 0.8229665071770335, 'eval_runtime': 6.7694, 'eval_samples_per_second': 27.329, 'eval_steps_per_second': 3.545, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_VM4aeIs'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 4.7730242380228524e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.29183614464561236,\n",
+      "    \"v_flip_p\": 0.26139135776597944,\n",
+      "    \"gray_scale_p\": 0.4673531288682136,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_VM4aeIs\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:33<04:21,  1.26it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6602, 'learning_rate': 3.579768178517139e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:40<04:21,  1.26it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5871238708496094, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7272727272727273, 'eval_runtime': 6.7151, 'eval_samples_per_second': 27.55, 'eval_steps_per_second': 3.574, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:30<03:23,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5699, 'learning_rate': 2.3865121190114262e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:38<03:23,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5288792252540588, 'eval_accuracy': 0.7351351351351352, 'eval_f1': 0.7860262008733626, 'eval_runtime': 7.9145, 'eval_samples_per_second': 23.375, 'eval_steps_per_second': 3.032, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:20<02:07,  1.16s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5004, 'learning_rate': 1.1932560595057131e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [06:28<02:07,  1.16s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.47091954946517944, 'eval_accuracy': 0.7675675675675676, 'eval_f1': 0.7942583732057418, 'eval_runtime': 7.947, 'eval_samples_per_second': 23.279, 'eval_steps_per_second': 3.02, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:13<00:00,  1.33it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4184, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [08:20<00:00,  1.33it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.43839508295059204, 'eval_accuracy': 0.7837837837837838, 'eval_f1': 0.8058252427184466, 'eval_runtime': 6.7672, 'eval_samples_per_second': 27.338, 'eval_steps_per_second': 3.547, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:31<00:00,  1.16s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 511.1208, 'train_samples_per_second': 13.719, 'train_steps_per_second': 0.861, 'train_loss': 0.5372205560857599, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.72it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.43839508295059204, 'eval_accuracy': 0.7837837837837838, 'eval_f1': 0.8058252427184466, 'eval_runtime': 6.9224, 'eval_samples_per_second': 26.725, 'eval_steps_per_second': 3.467, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 4\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_tD65Tok'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 8.066164211147095e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.14262461447346014,\n",
+      "    \"v_flip_p\": 0.34829575180008127,\n",
+      "    \"gray_scale_p\": 0.365252658707733,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_tD65Tok\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:15<05:38,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6867, 'learning_rate': 6.067955349749292e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:23<05:38,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6615181565284729, 'eval_accuracy': 0.6054054054054054, 'eval_f1': 0.5730994152046783, 'eval_runtime': 7.5922, 'eval_samples_per_second': 24.367, 'eval_steps_per_second': 3.161, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:51<04:45,  1.30s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6238, 'learning_rate': 4.0514142969625185e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [05:02<04:45,  1.30s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5714893341064453, 'eval_accuracy': 0.7135135135135136, 'eval_f1': 0.7725321888412018, 'eval_runtime': 10.8758, 'eval_samples_per_second': 17.01, 'eval_steps_per_second': 2.207, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [07:22<01:41,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5172, 'learning_rate': 2.034873244175744e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:29<01:41,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5564113259315491, 'eval_accuracy': 0.7189189189189189, 'eval_f1': 0.6976744186046512, 'eval_runtime': 7.6249, 'eval_samples_per_second': 24.263, 'eval_steps_per_second': 3.148, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:44<00:00,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4272, 'learning_rate': 1.8332191388970669e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:52<00:00,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4445246458053589, 'eval_accuracy': 0.8, 'eval_f1': 0.8159203980099503, 'eval_runtime': 7.6549, 'eval_samples_per_second': 24.167, 'eval_steps_per_second': 3.135, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [10:03<00:00,  1.37s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 603.4989, 'train_samples_per_second': 11.619, 'train_steps_per_second': 0.729, 'train_loss': 0.5637432878667658, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:07<00:00,  3.39it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4445246458053589, 'eval_accuracy': 0.8, 'eval_f1': 0.8159203980099503, 'eval_runtime': 7.5747, 'eval_samples_per_second': 24.424, 'eval_steps_per_second': 3.168, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_XXErmBJ'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 8.627449297127138e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.30186301568344553,\n",
+      "    \"v_flip_p\": 0.4035641366371901,\n",
+      "    \"gray_scale_p\": 0.36486589334690894,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_XXErmBJ\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:54<04:50,  1.13it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6739, 'learning_rate': 6.470586972845353e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:01<04:50,  1.13it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6253642439842224, 'eval_accuracy': 0.654054054054054, 'eval_f1': 0.6049382716049383, 'eval_runtime': 6.6478, 'eval_samples_per_second': 27.829, 'eval_steps_per_second': 3.61, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:57<03:24,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5636, 'learning_rate': 4.313724648563569e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:06<03:24,  1.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5215460658073425, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7753303964757708, 'eval_runtime': 6.9592, 'eval_samples_per_second': 26.583, 'eval_steps_per_second': 3.449, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [05:41<01:19,  1.38it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4653, 'learning_rate': 2.1568623242817846e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [05:48<01:19,  1.38it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4547145664691925, 'eval_accuracy': 0.8216216216216217, 'eval_f1': 0.8290155440414508, 'eval_runtime': 6.946, 'eval_samples_per_second': 26.634, 'eval_steps_per_second': 3.455, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [07:53<00:00,  1.07it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3803, 'learning_rate': 1.9607839311652586e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [08:01<00:00,  1.07it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.39084506034851074, 'eval_accuracy': 0.8216216216216217, 'eval_f1': 0.8324873096446701, 'eval_runtime': 7.7062, 'eval_samples_per_second': 24.007, 'eval_steps_per_second': 3.114, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:11<00:00,  1.12s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 491.5286, 'train_samples_per_second': 14.266, 'train_steps_per_second': 0.895, 'train_loss': 0.5208114363930442, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.80it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.39084506034851074, 'eval_accuracy': 0.8216216216216217, 'eval_f1': 0.8324873096446701, 'eval_runtime': 6.592, 'eval_samples_per_second': 28.064, 'eval_steps_per_second': 3.641, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 6\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_HZUsA7R'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 6.459345257343661e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.4821814530037276,\n",
+      "    \"v_flip_p\": 0.4644567465010884,\n",
+      "    \"gray_scale_p\": 0.37763259831790275,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_HZUsA7R\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:57<05:19,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6627, 'learning_rate': 4.844508943007745e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:05<05:19,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6089381575584412, 'eval_accuracy': 0.6594594594594595, 'eval_f1': 0.7319148936170212, 'eval_runtime': 6.6287, 'eval_samples_per_second': 27.909, 'eval_steps_per_second': 3.621, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:41<02:38,  1.39it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5424, 'learning_rate': 3.2296726286718304e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:48<02:38,  1.39it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.48035162687301636, 'eval_accuracy': 0.7837837837837838, 'eval_f1': 0.8058252427184466, 'eval_runtime': 6.6202, 'eval_samples_per_second': 27.945, 'eval_steps_per_second': 3.625, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [05:43<01:57,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4504, 'learning_rate': 1.6148363143359152e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [05:52<01:57,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4704108238220215, 'eval_accuracy': 0.7783783783783784, 'eval_f1': 0.7960199004975125, 'eval_runtime': 8.3069, 'eval_samples_per_second': 22.271, 'eval_steps_per_second': 2.889, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:07<00:00,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3806, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [08:15<00:00,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4178408980369568, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8128342245989305, 'eval_runtime': 7.3348, 'eval_samples_per_second': 25.222, 'eval_steps_per_second': 3.272, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:26<00:00,  1.15s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 507.0643, 'train_samples_per_second': 13.829, 'train_steps_per_second': 0.868, 'train_loss': 0.5090453061190519, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.62it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4178408980369568, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8128342245989305, 'eval_runtime': 6.9437, 'eval_samples_per_second': 26.643, 'eval_steps_per_second': 3.456, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_Db05OxY'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 8.627449297127138e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.30186301568344553,\n",
+      "    \"v_flip_p\": 0.4035641366371901,\n",
+      "    \"gray_scale_p\": 0.36486589334690894,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_Db05OxY\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:33<04:20,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6712, 'learning_rate': 6.470586972845353e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:39<04:20,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6093077063560486, 'eval_accuracy': 0.6594594594594595, 'eval_f1': 0.6834170854271358, 'eval_runtime': 6.693, 'eval_samples_per_second': 27.641, 'eval_steps_per_second': 3.586, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:14<02:32,  1.44it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5604, 'learning_rate': 4.313724648563569e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:21<02:32,  1.44it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5242305994033813, 'eval_accuracy': 0.7189189189189189, 'eval_f1': 0.7678571428571428, 'eval_runtime': 6.4055, 'eval_samples_per_second': 28.881, 'eval_steps_per_second': 3.747, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:55<01:14,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4524, 'learning_rate': 2.1568623242817846e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [05:01<01:14,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4729231595993042, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.7868852459016393, 'eval_runtime': 6.3679, 'eval_samples_per_second': 29.052, 'eval_steps_per_second': 3.769, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:36<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3806, 'learning_rate': 1.9607839311652586e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:42<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3955724835395813, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8367346938775511, 'eval_runtime': 6.3472, 'eval_samples_per_second': 29.147, 'eval_steps_per_second': 3.781, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:52<00:00,  1.07it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 412.9509, 'train_samples_per_second': 16.98, 'train_steps_per_second': 1.066, 'train_loss': 0.5161731719970704, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:05<00:00,  4.06it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3955724835395813, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8367346938775511, 'eval_runtime': 6.1506, 'eval_samples_per_second': 30.078, 'eval_steps_per_second': 3.902, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 8\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_qnt7qTm'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 6.418168561449824e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.2806225314693065,\n",
+      "    \"v_flip_p\": 0.35800980646120173,\n",
+      "    \"gray_scale_p\": 0.35066248679511797,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_qnt7qTm\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:21<03:35,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6597, 'learning_rate': 4.813626421087368e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:28<03:35,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6085811853408813, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.7447698744769875, 'eval_runtime': 6.2968, 'eval_samples_per_second': 29.38, 'eval_steps_per_second': 3.811, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:00<02:27,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.563, 'learning_rate': 3.209084280724912e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:06<02:27,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5332872271537781, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7829787234042552, 'eval_runtime': 6.3564, 'eval_samples_per_second': 29.104, 'eval_steps_per_second': 3.776, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:39<01:14,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4671, 'learning_rate': 1.604542140362456e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [04:46<01:14,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4813285171985626, 'eval_accuracy': 0.8, 'eval_f1': 0.8042328042328042, 'eval_runtime': 6.6153, 'eval_samples_per_second': 27.966, 'eval_steps_per_second': 3.628, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:19<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3996, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:25<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.42646780610084534, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8223350253807107, 'eval_runtime': 6.2809, 'eval_samples_per_second': 29.455, 'eval_steps_per_second': 3.821, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:35<00:00,  1.11it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 395.8982, 'train_samples_per_second': 17.712, 'train_steps_per_second': 1.111, 'train_loss': 0.5223365436900745, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.87it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.42646780610084534, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8223350253807107, 'eval_runtime': 6.2385, 'eval_samples_per_second': 29.655, 'eval_steps_per_second': 3.847, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_vUGlpSO'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 8.627449297127138e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.30186301568344553,\n",
+      "    \"v_flip_p\": 0.4035641366371901,\n",
+      "    \"gray_scale_p\": 0.36486589334690894,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_vUGlpSO\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:22<03:39,  1.51it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6931, 'learning_rate': 6.470586972845353e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:29<03:39,  1.51it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6846270561218262, 'eval_accuracy': 0.5567567567567567, 'eval_f1': 0.6639344262295082, 'eval_runtime': 6.2828, 'eval_samples_per_second': 29.445, 'eval_steps_per_second': 3.82, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:05<02:28,  1.48it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6293, 'learning_rate': 4.313724648563569e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:12<02:28,  1.48it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5758518576622009, 'eval_accuracy': 0.6756756756756757, 'eval_f1': 0.7247706422018348, 'eval_runtime': 6.2523, 'eval_samples_per_second': 29.589, 'eval_steps_per_second': 3.839, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:44<01:16,  1.44it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5383, 'learning_rate': 2.1568623242817846e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [04:50<01:16,  1.44it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5370621681213379, 'eval_accuracy': 0.7027027027027027, 'eval_f1': 0.7058823529411764, 'eval_runtime': 6.4154, 'eval_samples_per_second': 28.837, 'eval_steps_per_second': 3.741, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:23<00:00,  1.52it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4396, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:30<00:00,  1.52it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.47780826687812805, 'eval_accuracy': 0.7513513513513513, 'eval_f1': 0.7578947368421053, 'eval_runtime': 6.2008, 'eval_samples_per_second': 29.835, 'eval_steps_per_second': 3.87, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:40<00:00,  1.10it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 400.5351, 'train_samples_per_second': 17.507, 'train_steps_per_second': 1.099, 'train_loss': 0.5750896280462091, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:05<00:00,  4.15it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.47780826687812805, 'eval_accuracy': 0.7513513513513513, 'eval_f1': 0.7578947368421053, 'eval_runtime': 6.1407, 'eval_samples_per_second': 30.127, 'eval_steps_per_second': 3.908, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 10\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_XsNJh3e'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 5.08069272131592e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.41705521332037515,\n",
+      "    \"v_flip_p\": 0.0813270485780424,\n",
+      "    \"gray_scale_p\": 0.17763535011376075,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_XsNJh3e\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:36<04:43,  1.16it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6637, 'learning_rate': 3.81051954098694e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:44<04:43,  1.16it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5799012780189514, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7487684729064038, 'eval_runtime': 7.2527, 'eval_samples_per_second': 25.508, 'eval_steps_per_second': 3.309, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:13<02:21,  1.56it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5224, 'learning_rate': 2.54034636065796e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:20<02:21,  1.56it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4676978886127472, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.7741935483870968, 'eval_runtime': 6.3761, 'eval_samples_per_second': 29.014, 'eval_steps_per_second': 3.764, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:52<01:13,  1.50it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4152, 'learning_rate': 1.2817202092410616e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [04:58<01:13,  1.50it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.41337791085243225, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8297872340425533, 'eval_runtime': 6.4751, 'eval_samples_per_second': 28.571, 'eval_steps_per_second': 3.707, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:30<00:00,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3283, 'learning_rate': 1.1547028912081635e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:37<00:00,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3873978853225708, 'eval_accuracy': 0.8378378378378378, 'eval_f1': 0.8387096774193548, 'eval_runtime': 6.4884, 'eval_samples_per_second': 28.512, 'eval_steps_per_second': 3.699, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:47<00:00,  1.08it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 407.7754, 'train_samples_per_second': 17.196, 'train_steps_per_second': 1.079, 'train_loss': 0.4824158408425071, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.90it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3873978853225708, 'eval_accuracy': 0.8378378378378378, 'eval_f1': 0.8387096774193548, 'eval_runtime': 6.4868, 'eval_samples_per_second': 28.52, 'eval_steps_per_second': 3.7, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_sdsOrrB'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 1.638937774081293e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.31555147863504945,\n",
+      "    \"v_flip_p\": 0.11447089190557719,\n",
+      "    \"gray_scale_p\": 0.452710006503064,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_sdsOrrB\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:24<03:40,  1.50it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6838, 'learning_rate': 1.2292033305609696e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:30<03:40,  1.50it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6577768921852112, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.6772486772486773, 'eval_runtime': 6.4004, 'eval_samples_per_second': 28.904, 'eval_steps_per_second': 3.75, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:05<02:27,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6152, 'learning_rate': 8.194688870406464e-06, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:11<02:27,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.596728503704071, 'eval_accuracy': 0.7243243243243244, 'eval_f1': 0.7713004484304932, 'eval_runtime': 6.2379, 'eval_samples_per_second': 29.657, 'eval_steps_per_second': 3.847, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:44<01:15,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5612, 'learning_rate': 4.134593020977807e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [04:51<01:15,  1.47it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5475757718086243, 'eval_accuracy': 0.7567567567567568, 'eval_f1': 0.7593582887700534, 'eval_runtime': 6.368, 'eval_samples_per_second': 29.052, 'eval_steps_per_second': 3.769, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:25<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5199, 'learning_rate': 3.724858577457483e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:31<00:00,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5319870114326477, 'eval_accuracy': 0.745945945945946, 'eval_f1': 0.7539267015706805, 'eval_runtime': 6.3274, 'eval_samples_per_second': 29.238, 'eval_steps_per_second': 3.793, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:41<00:00,  1.09it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 402.1036, 'train_samples_per_second': 17.438, 'train_steps_per_second': 1.094, 'train_loss': 0.5950130289251154, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.90it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5319870114326477, 'eval_accuracy': 0.745945945945946, 'eval_f1': 0.7539267015706805, 'eval_runtime': 6.5434, 'eval_samples_per_second': 28.273, 'eval_steps_per_second': 3.668, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 12\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_KxxdKWh'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 1.6166919943341313e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.03398043168787862,\n",
+      "    \"v_flip_p\": 0.4309096009850647,\n",
+      "    \"gray_scale_p\": 0.20188777565913874,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_KxxdKWh\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:22<03:35,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6814, 'learning_rate': 1.2125189957505985e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:28<03:35,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6544196009635925, 'eval_accuracy': 0.6864864864864865, 'eval_f1': 0.7314814814814814, 'eval_runtime': 6.2203, 'eval_samples_per_second': 29.741, 'eval_steps_per_second': 3.858, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [02:59<02:23,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5957, 'learning_rate': 8.083459971670656e-06, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:05<02:23,  1.53it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.591998815536499, 'eval_accuracy': 0.7189189189189189, 'eval_f1': 0.7678571428571428, 'eval_runtime': 6.31, 'eval_samples_per_second': 29.319, 'eval_steps_per_second': 3.804, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:36<01:12,  1.52it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5249, 'learning_rate': 4.041729985835328e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [04:42<01:12,  1.52it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5300708413124084, 'eval_accuracy': 0.7675675675675676, 'eval_f1': 0.7860696517412936, 'eval_runtime': 6.2027, 'eval_samples_per_second': 29.825, 'eval_steps_per_second': 3.869, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:17<00:00,  1.54it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4784, 'learning_rate': 3.674299987123025e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:24<00:00,  1.54it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5100064873695374, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.7765957446808511, 'eval_runtime': 6.2552, 'eval_samples_per_second': 29.576, 'eval_steps_per_second': 3.837, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:35<00:00,  1.11it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 395.4215, 'train_samples_per_second': 17.733, 'train_steps_per_second': 1.113, 'train_loss': 0.5700991283763539, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:05<00:00,  4.15it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5100064873695374, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.7765957446808511, 'eval_runtime': 6.1599, 'eval_samples_per_second': 30.033, 'eval_steps_per_second': 3.896, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_TE6bQiN'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 2.810359570507263e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.15585814565044748,\n",
+      "    \"v_flip_p\": 0.49757467833044733,\n",
+      "    \"gray_scale_p\": 0.32493902881972675,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_TE6bQiN\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:29<03:33,  1.55it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6748, 'learning_rate': 2.1077696778804473e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:36<03:33,  1.55it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6398054957389832, 'eval_accuracy': 0.654054054054054, 'eval_f1': 0.7355371900826447, 'eval_runtime': 7.0883, 'eval_samples_per_second': 26.099, 'eval_steps_per_second': 3.386, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:17<02:59,  1.23it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5657, 'learning_rate': 1.4051797852536315e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:24<02:59,  1.23it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.517016589641571, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.8018867924528301, 'eval_runtime': 7.8123, 'eval_samples_per_second': 23.681, 'eval_steps_per_second': 3.072, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [05:03<01:26,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4869, 'learning_rate': 7.0258989262681576e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [05:09<01:26,  1.27it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4961181581020355, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.7717391304347825, 'eval_runtime': 6.53, 'eval_samples_per_second': 28.331, 'eval_steps_per_second': 3.675, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:52<00:00,  1.33it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4395, 'learning_rate': 6.387180842061962e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [06:58<00:00,  1.33it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4600895941257477, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.8, 'eval_runtime': 6.2404, 'eval_samples_per_second': 29.646, 'eval_steps_per_second': 3.846, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [07:08<00:00,  1.03it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 428.7112, 'train_samples_per_second': 16.356, 'train_steps_per_second': 1.026, 'train_loss': 0.5417569333856757, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:05<00:00,  4.08it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4600895941257477, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.8, 'eval_runtime': 6.1238, 'eval_samples_per_second': 30.21, 'eval_steps_per_second': 3.919, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 14\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_Tr1WYDq'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 7.829266304167906e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.07982965818844506,\n",
+      "    \"v_flip_p\": 0.21130719907675127,\n",
+      "    \"gray_scale_p\": 0.13893567083582092,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_Tr1WYDq\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:27<04:14,  1.30it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6535, 'learning_rate': 5.8719497281259293e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:34<04:14,  1.30it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5823829174041748, 'eval_accuracy': 0.7189189189189189, 'eval_f1': 0.74, 'eval_runtime': 6.9176, 'eval_samples_per_second': 26.744, 'eval_steps_per_second': 3.469, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:13<02:31,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4891, 'learning_rate': 3.914633152083953e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:20<02:31,  1.45it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6287944316864014, 'eval_accuracy': 0.6972972972972973, 'eval_f1': 0.776, 'eval_runtime': 6.5131, 'eval_samples_per_second': 28.404, 'eval_steps_per_second': 3.685, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [04:58<01:14,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3836, 'learning_rate': 1.9751103630969035e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [05:05<01:14,  1.49it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4509148597717285, 'eval_accuracy': 0.7837837837837838, 'eval_f1': 0.7802197802197802, 'eval_runtime': 6.7507, 'eval_samples_per_second': 27.404, 'eval_steps_per_second': 3.555, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [06:53<00:00,  1.20s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.2939, 'learning_rate': 1.7793787054927058e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [07:03<00:00,  1.20s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3941675126552582, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8315789473684211, 'eval_runtime': 9.7935, 'eval_samples_per_second': 18.89, 'eval_steps_per_second': 2.451, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [07:19<00:00,  1.00it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 439.4248, 'train_samples_per_second': 15.957, 'train_steps_per_second': 1.001, 'train_loss': 0.4550192746249112, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:08<00:00,  2.84it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3941675126552582, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8315789473684211, 'eval_runtime': 8.9407, 'eval_samples_per_second': 20.692, 'eval_steps_per_second': 2.684, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_m2YJCcb'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 6.721159998379602e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.18241608948504212,\n",
+      "    \"v_flip_p\": 0.18509048355844132,\n",
+      "    \"gray_scale_p\": 0.10475351538574385,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_m2YJCcb\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:06<05:31,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6361, 'learning_rate': 5.040869998784702e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:13<05:31,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5257845520973206, 'eval_accuracy': 0.7405405405405405, 'eval_f1': 0.7499999999999999, 'eval_runtime': 7.0262, 'eval_samples_per_second': 26.33, 'eval_steps_per_second': 3.416, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:21<04:01,  1.10s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5037, 'learning_rate': 3.3758553628224825e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:29<04:01,  1.10s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4549715518951416, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.8186046511627907, 'eval_runtime': 7.7111, 'eval_samples_per_second': 23.991, 'eval_steps_per_second': 3.112, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:36<01:43,  1.06it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3809, 'learning_rate': 1.6955653632275813e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [06:43<01:43,  1.06it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.44288891553878784, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.7953216374269005, 'eval_runtime': 7.2141, 'eval_samples_per_second': 25.644, 'eval_steps_per_second': 3.327, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:26<00:00,  1.06s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3028, 'learning_rate': 1.5275363632680913e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [08:35<00:00,  1.06s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.35217583179473877, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8659793814432989, 'eval_runtime': 8.9829, 'eval_samples_per_second': 20.595, 'eval_steps_per_second': 2.672, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:50<00:00,  1.20s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 530.346, 'train_samples_per_second': 13.222, 'train_steps_per_second': 0.83, 'train_loss': 0.45588083267211915, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:07<00:00,  3.16it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.35217583179473877, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8659793814432989, 'eval_runtime': 8.432, 'eval_samples_per_second': 21.94, 'eval_steps_per_second': 2.846, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 16\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_5yTGwaH'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 1.064717550865842e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.35392047327422704,\n",
+      "    \"v_flip_p\": 0.0294368834381617,\n",
+      "    \"gray_scale_p\": 0.03370016405515375,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_5yTGwaH\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:52<05:32,  1.01s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6827, 'learning_rate': 7.985381631493814e-06, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [01:59<05:32,  1.01s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6621648073196411, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.6903553299492386, 'eval_runtime': 7.4817, 'eval_samples_per_second': 24.727, 'eval_steps_per_second': 3.208, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [03:41<02:49,  1.30it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6104, 'learning_rate': 5.32358775432921e-06, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [03:48<02:49,  1.30it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5968446731567383, 'eval_accuracy': 0.745945945945946, 'eval_f1': 0.779342723004695, 'eval_runtime': 6.7382, 'eval_samples_per_second': 27.456, 'eval_steps_per_second': 3.562, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [05:55<01:47,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5215, 'learning_rate': 2.6859920033206465e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [06:04<01:47,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5354386568069458, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.7582417582417582, 'eval_runtime': 8.2766, 'eval_samples_per_second': 22.352, 'eval_steps_per_second': 2.9, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:13<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4776, 'learning_rate': 2.4198126156041862e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [08:22<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5194897055625916, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.7958115183246073, 'eval_runtime': 8.4101, 'eval_samples_per_second': 21.997, 'eval_steps_per_second': 2.854, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [08:37<00:00,  1.18s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 517.3739, 'train_samples_per_second': 13.553, 'train_steps_per_second': 0.85, 'train_loss': 0.573041465065696, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:07<00:00,  3.14it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5194897055625916, 'eval_accuracy': 0.7891891891891892, 'eval_f1': 0.7958115183246073, 'eval_runtime': 8.2602, 'eval_samples_per_second': 22.397, 'eval_steps_per_second': 2.905, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_KdPzwzc'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.weight', 'pooler.dense.bias']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 2.4168945514553496e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.4803894516372252,\n",
+      "    \"v_flip_p\": 0.04005573262029344,\n",
+      "    \"gray_scale_p\": 0.0929124804903616,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_KdPzwzc\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:13<05:18,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6618, 'learning_rate': 1.8126709135915122e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:22<05:18,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5947107076644897, 'eval_accuracy': 0.7351351351351352, 'eval_f1': 0.6993865030674845, 'eval_runtime': 9.0807, 'eval_samples_per_second': 20.373, 'eval_steps_per_second': 2.643, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:38<03:37,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5283, 'learning_rate': 1.2139402178900734e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:47<03:37,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5323321223258972, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.808695652173913, 'eval_runtime': 8.8366, 'eval_samples_per_second': 20.936, 'eval_steps_per_second': 2.716, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [07:13<01:47,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4197, 'learning_rate': 6.0971658002623586e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:23<01:47,  1.03it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.43111473321914673, 'eval_accuracy': 0.8324324324324325, 'eval_f1': 0.8472906403940886, 'eval_runtime': 9.3403, 'eval_samples_per_second': 19.807, 'eval_steps_per_second': 2.57, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:39<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3623, 'learning_rate': 5.492942162398522e-08, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:47<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.42529231309890747, 'eval_accuracy': 0.8216216216216217, 'eval_f1': 0.835820895522388, 'eval_runtime': 7.9565, 'eval_samples_per_second': 23.252, 'eval_steps_per_second': 3.016, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [10:02<00:00,  1.37s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 602.74, 'train_samples_per_second': 11.634, 'train_steps_per_second': 0.73, 'train_loss': 0.4930061947215687, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:08<00:00,  2.87it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.42529231309890747, 'eval_accuracy': 0.8216216216216217, 'eval_f1': 0.835820895522388, 'eval_runtime': 8.8189, 'eval_samples_per_second': 20.978, 'eval_steps_per_second': 2.721, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 18\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_OZe30nD'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.bias', 'pooler.dense.weight']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 9.474979774366729e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.14995067958799224,\n",
+      "    \"v_flip_p\": 0.2712280698131356,\n",
+      "    \"gray_scale_p\": 0.09845885146155786,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_OZe30nD\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n",
+      " 25%|██▌       | 110/440 [02:00<05:14,  1.05it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6807, 'learning_rate': 7.106234830775047e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 25%|██▌       | 110/440 [02:07<05:14,  1.05it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6044341325759888, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.680628272251309, 'eval_runtime': 6.9793, 'eval_samples_per_second': 26.507, 'eval_steps_per_second': 3.439, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:19<03:31,  1.04it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5724, 'learning_rate': 4.7374898871833646e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 50%|█████     | 220/440 [04:28<03:31,  1.04it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5266271829605103, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.8070175438596492, 'eval_runtime': 8.8722, 'eval_samples_per_second': 20.852, 'eval_steps_per_second': 2.705, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:46<01:52,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4121, 'learning_rate': 2.3687449435916823e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      " 75%|███████▌  | 330/440 [06:53<01:52,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5404261946678162, 'eval_accuracy': 0.7621621621621621, 'eval_f1': 0.7471264367816092, 'eval_runtime': 6.8279, 'eval_samples_per_second': 27.095, 'eval_steps_per_second': 3.515, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:11<00:00,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.327, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "                                                 \n",
+      "100%|██████████| 440/440 [09:18<00:00,  1.01it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.38724860548973083, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8461538461538463, 'eval_runtime': 7.688, 'eval_samples_per_second': 24.063, 'eval_steps_per_second': 3.122, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:34<00:00,  1.31s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 574.5173, 'train_samples_per_second': 12.205, 'train_steps_per_second': 0.766, 'train_loss': 0.4980694597417658, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.56it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.38724860548973083, 'eval_accuracy': 0.827027027027027, 'eval_f1': 0.8461538461538463, 'eval_runtime': 7.3443, 'eval_samples_per_second': 25.19, 'eval_steps_per_second': 3.268, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_lhGqMDq'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.bias', 'pooler.dense.weight']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 9.230928307664891e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.2294259262936994,\n",
+      "    \"v_flip_p\": 0.13244008324902623,\n",
+      "    \"gray_scale_p\": 0.12331375384699172,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_lhGqMDq\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:05<05:30,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6551, 'learning_rate': 6.923196230748668e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:13<05:30,  1.00s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6143904328346252, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.6772486772486773, 'eval_runtime': 7.9911, 'eval_samples_per_second': 23.151, 'eval_steps_per_second': 3.003, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:33<03:42,  1.01s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5106, 'learning_rate': 4.615464153832446e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:41<03:42,  1.01s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.4895593523979187, 'eval_accuracy': 0.7675675675675676, 'eval_f1': 0.7860696517412936, 'eval_runtime': 7.6354, 'eval_samples_per_second': 24.229, 'eval_steps_per_second': 3.143, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:57<01:48,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4299, 'learning_rate': 2.307732076916223e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:05<01:48,  1.02it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.435648649930954, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8044692737430168, 'eval_runtime': 8.1072, 'eval_samples_per_second': 22.819, 'eval_steps_per_second': 2.96, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:30<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.2903, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:37<00:00,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.32448598742485046, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8673469387755102, 'eval_runtime': 7.1509, 'eval_samples_per_second': 25.871, 'eval_steps_per_second': 3.356, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:52<00:00,  1.35s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 593.6357, 'train_samples_per_second': 11.812, 'train_steps_per_second': 0.741, 'train_loss': 0.47146494605324485, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:07<00:00,  3.20it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.32448598742485046, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8673469387755102, 'eval_runtime': 8.0536, 'eval_samples_per_second': 22.971, 'eval_steps_per_second': 2.98, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "-------------"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Checkpoint loaded at trial 20\n"
+     ]
+    }
+   ],
+   "source": [
+    "EPOCHS = 4\n",
+    "TRIALS = 2 # We will make the trial 2 by 2 until reaching the desired number of trials \n",
+    "\n",
+    "# let us initialize the arguments before the training function be fed \n",
+    "kwargs = {'epochs': EPOCHS, \n",
+    "        'model': model, \n",
+    "        'trainer': Trainer,\n",
+    "        'get_datasets': get_datasets,\n",
+    "        'seed': 0,\n",
+    "        'metric': 'f1'}\n",
+    "\n",
+    "\n",
+    "# let us instantiate the search function we will indicate the output dir as random kwarg initialization of the trainer\n",
+    "bo_search = SimpleBayesianOptimizationForFakeReal(train, search_spaces, random_kwargs = {'output_dir': 'data/checkpoints/model_'}, kwargs = kwargs, checkpoint='data/trials/checkpoint_2.txt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'output_dir': 'data/checkpoints/model_Xll9TtZ'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.bias', 'pooler.dense.weight']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 1.2827166224771633e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.16521424454024936,\n",
+      "    \"v_flip_p\": 0.25707805990429455,\n",
+      "    \"gray_scale_p\": 0.1392386319822735,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_Xll9TtZ\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [01:54<05:59,  1.09s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6806, 'learning_rate': 9.620374668578724e-06, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:02<05:59,  1.09s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.6590978503227234, 'eval_accuracy': 0.6702702702702703, 'eval_f1': 0.7024390243902439, 'eval_runtime': 7.508, 'eval_samples_per_second': 24.64, 'eval_steps_per_second': 3.197, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:23<03:44,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6098, 'learning_rate': 6.413583112385816e-06, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:32<03:44,  1.02s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.599656879901886, 'eval_accuracy': 0.7297297297297297, 'eval_f1': 0.7747747747747746, 'eval_runtime': 8.772, 'eval_samples_per_second': 21.09, 'eval_steps_per_second': 2.736, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [06:58<01:49,  1.00it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.5331, 'learning_rate': 3.206791556192908e-06, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:05<01:49,  1.00it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5277752876281738, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.7956989247311828, 'eval_runtime': 7.1039, 'eval_samples_per_second': 26.042, 'eval_steps_per_second': 3.378, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:20<00:00,  1.06s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.49, 'learning_rate': 0.0, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:29<00:00,  1.06s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5125455260276794, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.8041237113402061, 'eval_runtime': 8.2306, 'eval_samples_per_second': 22.477, 'eval_steps_per_second': 2.916, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:44<00:00,  1.33s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 584.3075, 'train_samples_per_second': 12.001, 'train_steps_per_second': 0.753, 'train_loss': 0.5783688978715377, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:11<00:00,  2.18it/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5125455260276794, 'eval_accuracy': 0.7945945945945946, 'eval_f1': 0.8041237113402061, 'eval_runtime': 12.0302, 'eval_samples_per_second': 15.378, 'eval_steps_per_second': 1.995, 'epoch': 4.0}\n",
+      "------------------------- End of training\n",
+      "{'output_dir': 'data/checkpoints/model_KrJltW3'}\n",
+      "------------------------- Beginning of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Some weights of the model checkpoint at google/vit-base-patch16-224-in21k were not used when initializing ViTForImageClassification: ['pooler.dense.bias', 'pooler.dense.weight']\n",
+      "- This IS expected if you are initializing ViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n",
+      "- This IS NOT expected if you are initializing ViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).\n",
+      "Some weights of ViTForImageClassification were not initialized from the model checkpoint at google/vit-base-patch16-224-in21k and are newly initialized: ['classifier.bias', 'classifier.weight']\n",
+      "You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.\n",
+      "Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging result (for instance --report_to none).\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current Config: \n",
+      " {\n",
+      "    \"lr\": 6.754841186120955e-05,\n",
+      "    \"batch_size\": 16,\n",
+      "    \"h_flip_p\": 0.012505377611333468,\n",
+      "    \"v_flip_p\": 0.13751465918455963,\n",
+      "    \"gray_scale_p\": 0.11160536907441138,\n",
+      "    \"rotation\": 1\n",
+      "}\n",
+      "Checkpoints in data/checkpoints/model_KrJltW3\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 25%|██▌       | 110/440 [02:18<05:53,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.6457, 'learning_rate': 5.0661308895907166e-05, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 25%|██▌       | 110/440 [02:26<05:53,  1.07s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5638249516487122, 'eval_accuracy': 0.7135135135135136, 'eval_f1': 0.7253886010362695, 'eval_runtime': 8.2477, 'eval_samples_per_second': 22.431, 'eval_steps_per_second': 2.91, 'epoch': 1.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 50%|█████     | 220/440 [04:43<03:46,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.4946, 'learning_rate': 3.3774205930604775e-05, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 50%|█████     | 220/440 [04:51<03:46,  1.03s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.5139048099517822, 'eval_accuracy': 0.772972972972973, 'eval_f1': 0.8189655172413793, 'eval_runtime': 7.7977, 'eval_samples_per_second': 23.725, 'eval_steps_per_second': 3.078, 'epoch': 2.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      " 75%|███████▌  | 330/440 [07:15<02:05,  1.14s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.3691, 'learning_rate': 1.7040622083168774e-05, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      " 75%|███████▌  | 330/440 [07:24<02:05,  1.14s/it]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.42719826102256775, 'eval_accuracy': 0.8108108108108109, 'eval_f1': 0.8022598870056498, 'eval_runtime': 9.4885, 'eval_samples_per_second': 19.497, 'eval_steps_per_second': 2.529, 'epoch': 3.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:38<00:00,  1.21it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'loss': 0.2857, 'learning_rate': 1.5351911786638533e-07, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "100%|██████████| 440/440 [09:44<00:00,  1.21it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3556261360645294, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8645833333333334, 'eval_runtime': 6.6377, 'eval_samples_per_second': 27.871, 'eval_steps_per_second': 3.616, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 440/440 [09:56<00:00,  1.36s/it]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'train_runtime': 596.6632, 'train_samples_per_second': 11.752, 'train_steps_per_second': 0.737, 'train_loss': 0.4487828991629861, 'epoch': 4.0}\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "100%|██████████| 24/24 [00:06<00:00,  3.77it/s]"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'eval_loss': 0.3556261360645294, 'eval_accuracy': 0.8594594594594595, 'eval_f1': 0.8645833333333334, 'eval_runtime': 6.5768, 'eval_samples_per_second': 28.129, 'eval_steps_per_second': 3.649, 'epoch': 4.0}\n",
+      "------------------------- End of training\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "bo_search.optimize(n_trials=TRIALS)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The best model is located at `data/checkpoints/model_lhGqMDq` with an accuracy of <i style=\"color: orange\">85.946</i> and an f1_score of <i style=\"color: orange\">86.735</i>."
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us make some predictions on the set in [predictions](predictions.ipynb)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "pytorch1-HleOW5am-py3.10",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.8"
+  },
+  "orig_nbformat": 4
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}

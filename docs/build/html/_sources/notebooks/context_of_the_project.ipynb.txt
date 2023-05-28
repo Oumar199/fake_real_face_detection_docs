@@ -1,0 +1,125 @@
+{
+ "cells": [
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Real and Fake Face Detection (RFFD)\n",
+    "---------------------------\n",
+    "\n",
+    "<p style=\"text-align: justify\">\n",
+    "In this project, we use Deep Neural Networks to identify which image is fake or real. The training will be done on a dataset that we got from Kaggle (check it here <a href=\"https://www.kaggle.com/datasets/ciplab/real-and-fake-face-detection?resource=download)\">kaggle_real_fake_faces</a>) created by <i style=\"color:chocolate\">Seonghyeon Nam, Seoung Wug Oh, et al.</i> They used expert knowledge to photoshop authentic images. The fake images range between easy, medium, or hard to recognize. The modifications are made on the eyes, nose, and mouth (which permit human beings to recognize others) or the whole face.\n",
+    "\n",
+    "</p>"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "![fake_photoshop](https://github.com/minostauros/Real-and-Fake-Face-Detection/raw/master/filename_description.jpg)"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<i style=\"color: gray\">The above image was got from the kaggle description of the image and describe  a file.</i>"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The image above is described as a fake image file. The name of the file can be decomposed into three different parts separated by underscores:\n",
+    "\n",
+    "- The first part indicates the quality of the Photoshop or the difficulty of recognizing that it is fake;\n",
+    "- The second part indicates the identification number of the image;\n",
+    "- The third and final part indicates the modified segment of the face in binary digits with the following signature -> $\\color{orange}[bit\\_left\\_eye,\\space bit\\_right\\_eye,\\space bit\\_nose,\\space bit\\_mouth]$.\n",
+    "\n",
+    "The segment is modified if it is the positive bit (1). Otherwise, the segment is not modified. "
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Let us define below the main parts of our project:"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Objective "
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The project aims to use `Vision Transformer (ViT)` mixed with `Transfer Learning` to achieve great accuracy and recall on the validation set. ViT is a new field that tries to reproduce the same performance that the Convolution Neural Networks on image classification tasks but using the Transformer architecture. It can provide very accurate results. \n",
+    "\n",
+    "![VISION_TRANSFORMER](https://www.researchgate.net/profile/Jacob-Heilmann-Clausen/publication/357885173/figure/fig1/AS:1113907477389319@1642587646516/Vision-Transformer-architecture-main-blocks-First-image-is-split-into-fixed-size_W640.jpg)\n",
+    "\n",
+    "However, we cannot obtain such great results with only a few images. ViT requires around 14 million images to learn image classification tasks, and we want to train the model only on one GPU device. Then the solution is to use Transfer Learning with a pre-trained Transformer to improve the overall performance. \n",
+    "\n",
+    "We will fine-tune the pre-trained ViT Model for which the ArXiv paper is available at the following link [Vision Transformer](https://arxiv.org/pdf/2010.11929). It was pre-trained on the ImageNet-21k, which contains 14 million images distributed over 21 thousand classes. The model is available in HuggingFace and can be imported with the HuggingFace API.\n",
+    "\n",
+    "For the moment, we want to obtain the following scores on the validation set:\n",
+    "\n",
+    "- **Accuracy > 80**\n",
+    "- **f1 > 80**\n",
+    "\n",
+    "Since the predictions are only sometimes damaging if False, we will only force the model to obtain up to 90% of **Accuracy** and **f1-score**.\n",
+    "\n",
+    "The following section describes the steps that are required to achieve the project.\n"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Steps 🧾"
+   ]
+  },
+  {
+   "attachments": {},
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "- Data generation and Exploration: We must recuperate the images, visualize them, and identify their statistics. Moreover, we will define the augmentation methods to add to the pictures ➡️ [Generating_and_visualizing](generate_and_visualize.ipynb)\n",
+    "\n",
+    "- Preprocessing method: We must, after Exploration, define the preprocessing to add before training the model on them. ➡️ [Preprocessing_and_loading](preprocessing_and_loading.ipynb)\n",
+    "\n",
+    "- Split the images between train, validation, and test sets. ➡️ [Data_splitting](split_dataset.ipynb)\n",
+    "\n",
+    "- Load the ViT Model, explain the architecture briefly, and define the metrics to add. ➡️ [VitModel_Metrics](vit_model.ipynb)\n",
+    "\n",
+    "- Search for the best model with The Bayesian Optimization strategy. ➡️ [Search_best_model](best_model_search.ipynb)\n",
+    "\n",
+    "- Fine-tune the best model. 🛑\n",
+    "\n",
+    "- Evaluate the model on the test set. ➡️ [Predictions](predictions.ipynb)\n",
+    "\n",
+    "- Deploy the model to Hugging Face. ➡️ [Deployment](deploy_to_hugging_face.ipynb)\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "language_info": {
+   "name": "python"
+  },
+  "orig_nbformat": 4
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
