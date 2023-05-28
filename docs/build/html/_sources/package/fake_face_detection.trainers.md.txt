@@ -1,0 +1,21 @@
+# fake_face_detection.trainers package
+
+## Submodules
+
+## fake_face_detection.trainers.custom_trainer module
+
+```{eval-rst}
+.. automodule:: fake_face_detection.trainers.custom_trainer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
+## Module contents
+
+```{eval-rst}
+.. automodule:: fake_face_detection.trainers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```

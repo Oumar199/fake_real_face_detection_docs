@@ -1,6 +1,0 @@
-Metadata-Version: 2.1
-Name: fake-face-detection
-Version: 0.0.1
-Summary: This package contains the main functions and classes used to achieve the project of detecting if a face's image is true or not.
-Author: Oumar Kane
-Author-email: oumar.kane@univ-thies.sn

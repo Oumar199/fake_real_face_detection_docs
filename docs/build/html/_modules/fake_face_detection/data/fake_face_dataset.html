@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fake_face_detection.data.fake_face_dataset &mdash; Fake and Real Face Detection with ViT 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            Fake and Real Face Detection with ViT
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../fake_face_detection.data.html">fake_face_detection.data package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../fake_face_detection.metrics.html">fake_face_detection.metrics package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../fake_face_detection.optimization.html">fake_face_detection.optimization package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../fake_face_detection.trainers.html">fake_face_detection.trainers package</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/split_dataset.html">Split data 🫧</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Fake and Real Face Detection with ViT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fake_face_detection.data.fake_face_dataset</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fake_face_detection.data.fake_face_dataset</h1><div class="highlight"><pre>
+<span></span>
+<span class="kn">from</span> <span class="nn">fake_face_detection.utils.compute_weights</span> <span class="kn">import</span> <span class="n">compute_weights</span>
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<div class="viewcode-block" id="FakeFaceDetectionDataset"><a class="viewcode-back" href="../../../fake_face_detection.data.html#fake_face_detection.data.fake_face_dataset.FakeFaceDetectionDataset">[docs]</a><span class="k">class</span> <span class="nc">FakeFaceDetectionDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fake_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">real_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">transformer</span><span class="p">,</span> <span class="o">**</span><span class="n">transformer_kwargs</span><span class="p">):</span>
+        
+        <span class="c1"># let us load the images </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fake_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">real_images</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">real_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_images</span>
+        
+        <span class="c1"># let us recuperate the labels</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fake_labels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">id_map</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">])]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fake_images</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">real_labels</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">id_map</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_images</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fake_labels</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_labels</span>
+        
+        <span class="c1"># let us recuperate the weights</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">compute_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">))</span>
+        
+        <span class="c1"># let us recuperate the transformer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span> <span class="o">=</span> <span class="n">transformer</span>
+        
+        <span class="c1"># let us recuperate the length</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+        
+        <span class="c1"># let us recuperate the transformer kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer_kwargs</span> <span class="o">=</span> <span class="n">transformer_kwargs</span>
+        
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        
+        <span class="c1"># let us recuperate an image</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+        
+        <span class="k">with</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> <span class="k">as</span> <span class="n">img</span><span class="p">:</span>
+        
+            <span class="c1"># let us recuperate a label</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+            
+            <span class="c1"># let us add a transformation on the images</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span><span class="p">:</span>
+                
+                <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">transformer_kwargs</span><span class="p">)</span>
+                
+        <span class="c1"># let us add the label inside the obtained dictionary</span>
+        <span class="n">image</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">label</span>
+        
+        <span class="k">return</span> <span class="n">image</span>    
+        
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span></div>
+        
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Oumar Kane.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

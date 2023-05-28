@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fake_face_detection.data.collator &mdash; Fake and Real Face Detection with ViT 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            Fake and Real Face Detection with ViT
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/generate_and_visualize.html">Generation and Exploration of the Images 🔎</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/split_dataset.html">Split data 🫧</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebooks/deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../package/fake_face_detection.html">fake_face_detection package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../package/fake_face_detection.data.html">fake_face_detection.data package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../package/fake_face_detection.metrics.html">fake_face_detection.metrics package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../package/fake_face_detection.optimization.html">fake_face_detection.optimization package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../package/fake_face_detection.trainers.html">fake_face_detection.trainers package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Fake and Real Face Detection with ViT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fake_face_detection.data.collator</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fake_face_detection.data.collator</h1><div class="highlight"><pre>
+<span></span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<div class="viewcode-block" id="fake_face_collator"><a class="viewcode-back" href="../../../package/fake_face_detection.data.html#fake_face_detection.data.collator.fake_face_collator">[docs]</a><span class="k">def</span> <span class="nf">fake_face_collator</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span> 
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The data collator for training vision transformer models on fake and real face dataset</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        batch (list): A dictionary containing the pixel values and the labels</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: The final dictionary</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">new_batch</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;pixel_values&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s1">&#39;labels&#39;</span><span class="p">:</span> <span class="p">[]</span>
+    <span class="p">}</span>
+    
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+        
+        <span class="n">pixel_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> \
+            <span class="k">else</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        
+        <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pixel_values</span><span class="p">)</span>
+        
+        <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]))</span>
+    
+    <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;pixel_values&#39;</span><span class="p">])</span>
+    
+    <span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">new_batch</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">])</span>
+    
+    <span class="k">return</span> <span class="n">new_batch</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Oumar Kane.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
