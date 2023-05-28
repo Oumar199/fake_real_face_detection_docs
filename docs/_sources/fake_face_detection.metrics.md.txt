@@ -1,0 +1,30 @@
+# fake_face_detection.metrics package
+
+## Submodules
+
+## fake_face_detection.metrics.compute_metrics module
+
+```{eval-rst}
+.. automodule:: fake_face_detection.metrics.compute_metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
+## fake_face_detection.metrics.make_predictions module
+
+```{eval-rst}
+.. automodule:: fake_face_detection.metrics.make_predictions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
+## Module contents
+
+```{eval-rst}
+.. automodule:: fake_face_detection.metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```

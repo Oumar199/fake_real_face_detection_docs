@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generation and Exploration of the Images 🔎 &mdash; Fake and Real Face Detection with ViT 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/nbsphinx-code-cells.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+        <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Preprocessing and loading ⚗️" href="preprocessing_and_loading.html" />
+    <link rel="prev" title="Bayesian Optimization from Scratch 🔝" href="bayesian_optimization.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Fake and Real Face Detection with ViT
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="context_of_the_project.html">Real and Fake Face Detection (RFFD)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bayesian_optimization.html">Bayesian Optimization from Scratch 🔝</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Generation and Exploration of the Images 🔎</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#Recuperate-the-images">Recuperate the images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Number-of-recuperated-images">Number of recuperated images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Visualize-a-grid-of-images">Visualize a grid of images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Investigate-the-shapes">Investigate the shapes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Augmentation-methods-to-use">Augmentation methods to use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#Mean-and-variance-of-the-images">Mean and variance of the images</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="preprocessing_and_loading.html">Preprocessing and loading ⚗️</a></li>
+<li class="toctree-l1"><a class="reference internal" href="split_dataset.html">Split data 🫧</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vit_model.html">Vision Transformer Model + Configuration and Metrics 👓</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deploy_to_hugging_face.html">Deploy the ViT Model 🚀</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.html">fake_face_detection package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.data.html">fake_face_detection.data package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.metrics.html">fake_face_detection.metrics package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.optimization.html">fake_face_detection.optimization package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../package/fake_face_detection.trainers.html">fake_face_detection.trainers package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Fake and Real Face Detection with ViT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Generation and Exploration of the Images 🔎</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/notebooks/generate_and_visualize.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="Generation-and-Exploration-of-the-Images-🔎">
+<h1>Generation and Exploration of the Images 🔎<a class="headerlink" href="#Generation-and-Exploration-of-the-Images-🔎" title="Permalink to this heading"></a></h1>
+<p>In this notebook, we will generate real/fake face images to explore them. Let us add the scheduling below:</p>
+<ul class="simple">
+<li><p>Recuperate the images in lists from their directory. We must create a list for each of the types of images.</p></li>
+<li><p>Print the number of recuperated images.</p></li>
+<li><p>Visualize the images and compare them.</p></li>
+<li><p>Print the shapes of the images. If they have different shapes, identify a standard shape for all the images and rescale them.</p></li>
+<li><p>Identify the augmentation methods to use on the images.</p></li>
+<li><p>Print the mean and the variance of the images and store them.</p></li>
+</ul>
+<p>Let us import below some libraries.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">warnings</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s1">&#39;ignore&#39;</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">torch.utils.tensorboard</span> <span class="kn">import</span> <span class="n">SummaryWriter</span>
+<span class="kn">from</span> <span class="nn">PIL.JpegImagePlugin</span> <span class="kn">import</span> <span class="n">JpegImageFile</span>
+<span class="kn">from</span> <span class="nn">torchvision</span> <span class="kn">import</span> <span class="n">transforms</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">plotly.express</span> <span class="k">as</span> <span class="nn">px</span>
+<span class="kn">import</span> <span class="nn">sklearn.utils</span> <span class="k">as</span> <span class="nn">skl</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">ImageDraw</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">os</span>
+</pre></div>
+</div>
+</div>
+<p>Let us initialize a directory that will store the images and their characteristics.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fake_real_face</span> <span class="o">=</span> <span class="p">{}</span>
+</pre></div>
+</div>
+</div>
+<section id="Recuperate-the-images">
+<h2>Recuperate the images<a class="headerlink" href="#Recuperate-the-images" title="Permalink to this heading"></a></h2>
+<p>The images can be recuperated in lists inside the created dictionary—one for the actual pictures and another for the fake ones. We stored the photos in ‘data/real_and_fake_face/’ directory. Inside the directory, the authentic images are classed in the ‘training_real’ directory, and the photoshopped pictures are stored in the ‘training_fake’ directory.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">path</span> <span class="o">=</span> <span class="s1">&#39;data/real_and_fake_face/&#39;</span>
+
+<span class="n">fake_path</span> <span class="o">=</span> <span class="s2">&quot;data/real_and_fake_face/training_fake/&quot;</span>
+
+<span class="n">real_path</span> <span class="o">=</span> <span class="s2">&quot;data/real_and_fake_face/training_real/&quot;</span>
+
+<span class="c1"># recuperate real images</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">real_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))]</span>
+
+<span class="c1"># recuperate fake images</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fake_path</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">))]</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="Number-of-recuperated-images">
+<h2>Number of recuperated images<a class="headerlink" href="#Number-of-recuperated-images" title="Permalink to this heading"></a></h2>
+<p>Let us print below the number of recuperated images and percentages.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># recuperate the lengths</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_real&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_fake&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">])</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;n_images&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_real&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_fake&#39;</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number of real images -&gt; </span><span class="si">{</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_real&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_real&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;n_images&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> %)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number of fake images -&gt; </span><span class="si">{</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_fake&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_fake&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;n_images&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> %)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number of images -&gt; </span><span class="si">{</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;n_images&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Number of real images -&gt; 1081 (53 %)
+Number of fake images -&gt; 960 (47 %)
+Number of images -&gt; 2041
+</pre></div></div>
+</div>
+<p>Let us additionally print the difference between the lengths.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The difference of images is of </span><span class="si">{</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_real&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;len_fake&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+The difference of images is of 121
+</pre></div></div>
+</div>
+<hr class="docutils" />
+<p><strong>Conclusion</strong>: We don’t have a significant difference between the percentages. But considering the difference between the lengths, it will be more accurate to recuperate the weights to use them later to avoid any Class Unbalance when making predictions. The importance of a class is given by the number of samples divided by the number of classes multiplied by the number of occurrences of the considered class. See the following formula:</p>
+<div class="math notranslate nohighlight">
+\[weight(class) = \frac{n\_samples}{n\_classes \times n\_occurences}\]</div>
+<p>We must identify the id of each image. Let us take the real image class as the positive and the fake image class as the negative.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">ids</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;real&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;fake&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;ids&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ids</span> <span class="c1"># we will use it when pre-processing the images</span>
+</pre></div>
+</div>
+</div>
+<p>We can directly use the class weight computation’s method of <code class="docutils literal notranslate"><span class="pre">sklearn.</span></code></p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/utils/compute_weights.py
+<span class="kn">import</span> <span class="nn">sklearn.utils</span> <span class="k">as</span> <span class="nn">skl</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="k">def</span> <span class="nf">compute_weights</span><span class="p">(</span><span class="n">samples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the weights with the &#39;balanced&#39; method</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        samples (List[int]): The samples: A list of integers</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        numpy.ndarray: A array containing the weights</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># get unique classes</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">samples</span><span class="p">)</span>
+
+    <span class="c1"># calculate the weights with the balanced method</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="n">skl</span><span class="o">.</span><span class="n">class_weight</span><span class="o">.</span><span class="n">compute_class_weight</span><span class="p">(</span><span class="s1">&#39;balanced&#39;</span><span class="p">,</span> <span class="n">classes</span><span class="o">=</span><span class="n">classes</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">samples</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">weights</span>
+<br/></pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/utils/compute_weights.py
+</pre></div></div>
+</div>
+<hr class="docutils" />
+</section>
+<section id="Visualize-a-grid-of-images">
+<h2>Visualize a grid of images<a class="headerlink" href="#Visualize-a-grid-of-images" title="Permalink to this heading"></a></h2>
+<p>This section implies using tensorboard to visualize some images. We will use the directory fake_face_logs for all the subsequent visualizations. Let us implement a function below, which will make that process simple.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/utils/visualize_images.py
+<span class="kn">from</span> <span class="nn">torch.utils.tensorboard</span>  <span class="kn">import</span> <span class="n">SummaryWriter</span>
+<span class="kn">from</span> <span class="nn">PIL.JpegImagePlugin</span> <span class="kn">import</span> <span class="n">JpegImageFile</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="c1"># use a style with no grid</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">style</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;_mpl-gallery-nogrid&quot;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">visualize_images</span><span class="p">(</span><span class="n">images_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">JpegImageFile</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]],</span>
+                     <span class="n">log_directory</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fake_face_logs&quot;</span><span class="p">,</span>
+                     <span class="n">n_images</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">40</span><span class="p">,</span>
+                     <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span>
+                     <span class="n">seed</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">images_dict</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">images_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+
+    <span class="c1"># add seed</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+    <span class="c1"># verify if we must add a title for each image</span>
+    <span class="n">add_titles</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">images_dict</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+
+    <span class="n">images_</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># modify the dictionary to obtain a tuple of images with their corresponding tags</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">images_dict</span><span class="p">:</span>
+
+        <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
+
+            <span class="n">images_</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">image</span><span class="p">))</span>
+
+    <span class="c1"># we take the number of images in the list if n_images is larger</span>
+    <span class="k">if</span> <span class="n">n_images</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">images_</span><span class="p">):</span> <span class="n">n_images</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">images_</span><span class="p">)</span>
+
+    <span class="c1"># choose random images</span>
+    <span class="n">images</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choices</span><span class="p">(</span><span class="n">images_</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="n">n_images</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">JpegImageFile</span><span class="p">):</span>
+
+        <span class="n">images</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="ow">in</span> <span class="p">[</span><span class="n">JpegImageFile</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>
+
+    <span class="c1"># calculate the number of rows and columns</span>
+    <span class="n">n_rows</span> <span class="o">=</span> <span class="n">ceil</span><span class="p">(</span><span class="n">sqrt</span><span class="p">(</span><span class="n">n_images</span><span class="p">))</span>
+
+    <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span><span class="o">=</span><span class="n">n_rows</span><span class="p">,</span> <span class="n">ncols</span><span class="o">=</span><span class="n">n_rows</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="n">figsize</span><span class="p">)</span>
+
+    <span class="c1"># flat the axes</span>
+    <span class="n">axs</span> <span class="o">=</span> <span class="n">axs</span><span class="o">.</span><span class="n">flat</span>
+
+    <span class="c1"># trace images</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_images</span><span class="p">):</span>
+
+        <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">interpolation</span> <span class="o">=</span> <span class="s2">&quot;nearest&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">add_titles</span><span class="p">:</span> <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>
+
+    <span class="c1"># add padding to the figure</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+
+    <span class="c1"># deleting no necessary plots</span>
+    <span class="p">[</span><span class="n">fig</span><span class="o">.</span><span class="n">delaxes</span><span class="p">(</span><span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_images</span><span class="p">,</span> <span class="n">n_rows</span> <span class="o">*</span> <span class="n">n_rows</span><span class="p">)]</span>
+
+    <span class="c1"># add figure to tensorboard</span>
+    <span class="k">with</span> <span class="n">SummaryWriter</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_directory</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">))</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
+
+        <span class="c1"># identify the tag</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">images_dict</span><span class="p">))</span> <span class="k">if</span> <span class="n">add_titles</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">images_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">writer</span><span class="o">.</span><span class="n">add_figure</span><span class="p">(</span><span class="n">tag</span> <span class="o">=</span> <span class="n">tag</span><span class="p">,</span> <span class="n">figure</span> <span class="o">=</span> <span class="n">fig</span><span class="p">)</span>
+<br/></pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/utils/visualize_images.py
+</pre></div></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/utils/visualize_images.py
+</pre></div>
+</div>
+</div>
+<p>Let us add some images to tensorboard.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># adding the real images</span>
+<span class="n">visualize_images</span><span class="p">({</span><span class="s1">&#39;fake&#39;</span><span class="p">:</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">],</span> <span class="s1">&#39;real&#39;</span><span class="p">:</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">]})</span>
+</pre></div>
+</div>
+</div>
+<hr class="docutils" />
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load the TensorBoard notebook extension</span>
+<span class="o">%</span><span class="k">load_ext</span> tensorboard
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Visualize logged images</span>
+<span class="c1"># %tensorboard --logdir fake_face_logs</span>
+</pre></div>
+</div>
+</div>
+<hr class="docutils" />
+</section>
+<section id="Investigate-the-shapes">
+<h2>Investigate the shapes<a class="headerlink" href="#Investigate-the-shapes" title="Permalink to this heading"></a></h2>
+<p>In this section, we want to verify if all the images have the same shape. Let us investigate it below.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">size</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+(600, 600)
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># first verify if all images have the same shape</span>
+<span class="n">images</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="c1"># add real images</span>
+<span class="n">images</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])</span>
+
+<span class="c1"># add fake images</span>
+<span class="n">images</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">])</span>
+
+<span class="c1"># verify with numpy if all images have equal sizes</span>
+<span class="n">sizes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">image</span><span class="o">.</span><span class="n">size</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+
+<span class="nb">sum</span><span class="p">(</span><span class="n">sizes</span> <span class="o">==</span> <span class="n">sizes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="n">sizes</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+array([ True,  True])
+</pre></div></div>
+</div>
+<p>We have the exact sizes for all the images. Let us recuperate the standard shape of the pictures.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;shape&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">sizes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<p><strong>Note</strong>: It was only a verification to avoid any mistakes in the following sections, but we will resize the shape of the images when using them for the training. So the actual shapes of the image do not matter for the training.</p>
+</section>
+<section id="Augmentation-methods-to-use">
+<h2>Augmentation methods to use<a class="headerlink" href="#Augmentation-methods-to-use" title="Permalink to this heading"></a></h2>
+<p>Let us define a function that displays an image with pil.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%writefile</span> fake-face-detection/fake_face_detection/utils/display_pil.py
+<span class="kn">from</span> <span class="nn">PIL.JpegImagePlugin</span> <span class="kn">import</span> <span class="n">JpegImageFile</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">ImageDraw</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">def</span> <span class="nf">display</span><span class="p">(</span><span class="n">images</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">JpegImageFile</span><span class="p">],</span> <span class="n">labels</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">w</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">,</span> <span class="n">h</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span> <span class="n">left_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;white&quot;</span><span class="p">,</span> <span class="n">right_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;white&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Display a dual image</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        images (List[JpegImageFile]): A list containing two images</span>
+<span class="sd">        labels (List[str]): The labels of the images</span>
+<span class="sd">        w (int, optional): The width. Defaults to 300.</span>
+<span class="sd">        h (int, optional): The height. Defaults to 200.</span>
+<span class="sd">        left_color (str, optional): The color of left label. Defaults to &quot;white&quot;.</span>
+<span class="sd">        right_color (str, optional): The color of the right label. Defaults to &quot;white&quot;.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        PIL.Image: A pillow image</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># define a grid</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span>
+
+    <span class="c1"># draw the grid</span>
+    <span class="n">draw</span> <span class="o">=</span> <span class="n">ImageDraw</span><span class="o">.</span><span class="n">Draw</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+
+    <span class="c1"># define the second box</span>
+    <span class="n">box</span> <span class="o">=</span> <span class="p">(</span><span class="n">w</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>  <span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># define the size of the images</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="n">w</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+
+    <span class="c1"># add images to the grid</span>
+    <span class="n">grid</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+
+    <span class="n">grid</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">size</span><span class="p">),</span> <span class="n">box</span> <span class="o">=</span> <span class="n">box</span><span class="p">)</span>
+
+    <span class="c1"># draw labels</span>
+    <span class="n">draw</span><span class="o">.</span><span class="n">text</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">fill</span><span class="o">=</span><span class="n">left_color</span><span class="p">)</span>
+
+    <span class="n">draw</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">box</span><span class="p">,</span> <span class="n">labels</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">fill</span><span class="o">=</span><span class="n">right_color</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">grid</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Overwriting fake-face-detection/fake_face_detection/utils/display_pil.py
+</pre></div></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%</span><span class="k">run</span> fake-face-detection/fake_face_detection/utils/display_pil.py
+</pre></div>
+</div>
+</div>
+<p>Since the number of images in our dataset is unimportant, we must add some noise to the images to perform better by making the model more robust to variations and not over-fit. The following augmentation methods can be added to the pictures:</p>
+<ul class="simple">
+<li><p>Random Horizontal Flip: This method will not alter the original images since a face must be recognized at any orientation. The only parameter that will be required for that method is the probability of an image being flipped. Let us do it on a random image in the data set to illustrate that method.</p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])</span>
+
+<span class="n">hf_image</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">RandomHorizontalFlip</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mi">1</span><span class="p">)(</span><span class="n">image</span><span class="p">)</span>
+
+<span class="n">display</span><span class="p">([</span><span class="n">image</span><span class="p">,</span> <span class="n">hf_image</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;original&#39;</span><span class="p">,</span> <span class="s1">&#39;with_horizontal_flip&#39;</span><span class="p">],</span> <span class="n">w</span><span class="o">=</span><span class="mi">700</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_43_0.png" src="../_images/notebooks_generate_and_visualize_43_0.png" />
+</div>
+</div>
+<ul class="simple">
+<li><p>Random Vertical Flip: We will use it for the same reason that for the previous method. The only parameter that will be required for that method is the probability of an image being flipped.</p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])</span>
+
+<span class="n">vf_image</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">RandomVerticalFlip</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mi">1</span><span class="p">)(</span><span class="n">image</span><span class="p">)</span>
+
+<span class="n">display</span><span class="p">([</span><span class="n">image</span><span class="p">,</span> <span class="n">vf_image</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;original&#39;</span><span class="p">,</span> <span class="s1">&#39;with_vertical_flip&#39;</span><span class="p">],</span> <span class="n">w</span><span class="o">=</span><span class="mi">700</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">left_color</span><span class="o">=</span><span class="s2">&quot;lightblue&quot;</span><span class="p">,</span> <span class="n">right_color</span><span class="o">=</span><span class="s2">&quot;black&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_45_0.png" src="../_images/notebooks_generate_and_visualize_45_0.png" />
+</div>
+</div>
+<ul class="simple">
+<li><p>Random Gray Scale: All images are in RGB, but changing them to Grayscale will alternate the shape of the faces, but we will remove the colors. It will train the model to focus more on the form of the faces and not the colors, which can sometimes give rise to not identifying fake images. In the case in which the Grayscale seems more accurate than the original one, that implies adding noise to the image, like with the following example, and making the model not over-fit.</p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">])</span>
+
+<span class="n">gr_image</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">RandomGrayscale</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mi">1</span><span class="p">)(</span><span class="n">image</span><span class="p">)</span>
+
+<span class="n">display</span><span class="p">([</span><span class="n">image</span><span class="p">,</span> <span class="n">gr_image</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;original&#39;</span><span class="p">,</span> <span class="s1">&#39;with_gray_flip&#39;</span><span class="p">],</span> <span class="n">w</span><span class="o">=</span><span class="mi">700</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_47_0.png" src="../_images/notebooks_generate_and_visualize_47_0.png" />
+</div>
+</div>
+<ul class="simple">
+<li><p>Random Rotation: Rotation makes the image seem unstable, and it can sometimes be the case when taking a photo. That will force the model to generalize to non-seen images. This method takes one argument, which is the range of degrees of rotation. Let us fix it to (0, 90). However, we will determine if the rotation is necessary because it can add too much noise to the image. We already have to use the random vertical and horizontal flip as augmentation methods.</p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">])</span>
+
+<span class="n">rot_image</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">RandomRotation</span><span class="p">(</span><span class="n">degrees</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">90</span><span class="p">))(</span><span class="n">image</span><span class="p">)</span>
+
+<span class="n">display</span><span class="p">([</span><span class="n">image</span><span class="p">,</span> <span class="n">rot_image</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;original&#39;</span><span class="p">,</span> <span class="s1">&#39;with_gray_flip&#39;</span><span class="p">],</span> <span class="n">w</span><span class="o">=</span><span class="mi">700</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_49_0.png" src="../_images/notebooks_generate_and_visualize_49_0.png" />
+</div>
+</div>
+</section>
+<section id="Mean-and-variance-of-the-images">
+<h2>Mean and variance of the images<a class="headerlink" href="#Mean-and-variance-of-the-images" title="Permalink to this heading"></a></h2>
+<p>Let us recuperate the means and the variances of the images (on each color dimension) for the study (for upcoming modeling on the images). We will use another pre-defined transfer learning’s means and variances for the preprocessing.</p>
+<p>Let us first recuperate the images in a NumPy array.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># recuperate in a numpy array (it can take some moment since we have 2041 images to concatenate and calculate their means and variances)</span>
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span>
+
+<span class="n">np_images</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">]])</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># let print the type of the image (can be int -&gt; from 0 to 255 or float -&gt; from 0 to 1)</span>
+<span class="n">np_images</span><span class="o">.</span><span class="n">dtype</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+dtype(&#39;uint8&#39;)
+</pre></div></div>
+</div>
+<p>We have integer values. We must convert the values to float by dividing by 255. We will do it when calculating the means and variances. Let us visualize the distribution of the pixels of the mean of 200 samples taken from the dataset.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[24]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">flat_images</span> <span class="o">=</span> <span class="p">[</span><span class="n">image</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">np_images</span><span class="p">]</span>
+
+<span class="n">samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choices</span><span class="p">(</span><span class="n">np_images</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="mi">200</span><span class="p">))</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[25]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_57_0.png" src="../_images/notebooks_generate_and_visualize_57_0.png" />
+</div>
+</div>
+<p>The plot shows that the pixels follow a normal distribution. The means is very close to the middle (0.5 of the max pixel) of the distribution, but it is not the case for the variance. See the next notebook for a discussion on the actual means and variances that must follow the pixels of the colors of the images.</p>
+<p>Let us compare a normal distribution of pixels following a means of 0.5 and standard deviation of 0.5 with that of our current images:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[26]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">good_distribution</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">600</span><span class="p">))</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;original images&quot;</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">good_distribution</span> <span class="o">*</span> <span class="mi">255</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;red&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;normal with mean = 0.5, std = 0.5&quot;</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_generate_and_visualize_59_0.png" src="../_images/notebooks_generate_and_visualize_59_0.png" />
+</div>
+</div>
+<p>We can see they have almost the same means but not the same standard deviations.</p>
+<p>We must keep the color dimension and average values on the other dimensions to calculate the means and variance of the images on color dimensions. For numpy, the color dimension is the third dimension, so we will calculate the average on dimensions 0, 1, and 2. We must calculate by batches and average the result since we have many images to process.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[27]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span> <span class="o">=</span> <span class="mi">3</span> <span class="c1"># batch size</span>
+
+<span class="n">means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">])</span> <span class="c1"># means</span>
+
+<span class="n">var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">])</span> <span class="c1"># variances</span>
+
+<span class="n">n_ops</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1"># number of operations</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np_images</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">batch</span><span class="p">):</span>
+
+    <span class="n">array_</span> <span class="o">=</span> <span class="n">np_images</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">batch</span><span class="p">]</span> <span class="o">/</span> <span class="mi">255</span>
+
+    <span class="n">means</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">array_</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+    <span class="n">var</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">array_</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">rescaled_imgs</span> <span class="o">=</span> <span class="n">array_</span>
+
+    <span class="n">n_ops</span> <span class="o">+=</span> <span class="mi">1</span>
+
+<span class="n">means</span> <span class="o">/=</span> <span class="n">n_ops</span>
+
+<span class="n">var</span> <span class="o">/=</span> <span class="n">n_ops</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[28]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">means</span><span class="p">,</span> <span class="n">var</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[28]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+(array([0.51424026, 0.42879717, 0.38588453]),
+ array([0.07777136, 0.06481383, 0.06337294]))
+</pre></div></div>
+</div>
+<p>Let us add the rescaled images, the original images, and the statistics into the dictionary of characteristics.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[29]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;means&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">means</span>
+
+<span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;var&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span>
+</pre></div>
+</div>
+</div>
+<p>Notice that we will use the square root of the variance (standard deviation) for the normalization.</p>
+<hr class="docutils" />
+<p>We only need to save the characteristics, so let us delete the original images from the dictionary.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[30]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">del</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;fake&#39;</span><span class="p">]</span>
+<span class="k">del</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;real&#39;</span><span class="p">]</span>
+<span class="k">del</span> <span class="n">fake_real_face</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[31]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;data/extractions/fake_real_dict.txt&quot;</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+
+    <span class="n">pickler</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">Pickler</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="n">pickler</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">fake_real_face</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<hr class="docutils" />
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="bayesian_optimization.html" class="btn btn-neutral float-left" title="Bayesian Optimization from Scratch 🔝" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="preprocessing_and_loading.html" class="btn btn-neutral float-right" title="Preprocessing and loading ⚗️" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Oumar Kane.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
