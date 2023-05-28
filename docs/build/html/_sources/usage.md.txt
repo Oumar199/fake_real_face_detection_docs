@@ -14,17 +14,25 @@ $ cd fake_face_detection_ViT
 ```
 - Create a python environment with `virtualenv`:
 ```console
-$ pip install virtualenv
-$ python<version> -m venv <virtual-environment-name>
+$ pip install --user virtualenv
+$ python<version> -m venv env
+```
+- Activate the virtual environment:
+```console
+$ .\env\Scripts\activate
 ```
 - Install the required libraries in your environment by typing the following command:
 ```console
 $ pip install -r requirements.txt
 ```
-- Finally install the package with:
+- Install the `fake_face_detection` package with:
 ```console
 $ pip install -e fake-face-detection
 ```
+- You can deactivate the environment if you finish:
+```console
+$ deactivate
+``` 
 
 ## Example
 

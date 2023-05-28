@@ -103,8 +103,14 @@
 <ul class="simple">
 <li><p>Create a python environment with <code class="docutils literal notranslate"><span class="pre">virtualenv</span></code>:</p></li>
 </ul>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip<span class="w"> </span>install<span class="w"> </span>virtualenv
-<span class="gp">$ </span>python&lt;version&gt;<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>&lt;virtual-environment-name&gt;
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>virtualenv
+<span class="gp">$ </span>python&lt;version&gt;<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>env
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Activate the virtual environment:</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>.<span class="se">\e</span>nv<span class="se">\S</span>cripts<span class="se">\a</span>ctivate
 </pre></div>
 </div>
 <ul class="simple">
@@ -114,9 +120,15 @@
 </pre></div>
 </div>
 <ul class="simple">
-<li><p>Finally install the package with:</p></li>
+<li><p>Install the <code class="docutils literal notranslate"><span class="pre">fake_face_detection</span></code> package with:</p></li>
 </ul>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>fake-face-detection
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>You can deactivate the environment if you finish:</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>deactivate
 </pre></div>
 </div>
 </section>
